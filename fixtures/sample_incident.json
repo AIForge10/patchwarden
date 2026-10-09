@@ -1,0 +1,10 @@
+{
+  "error_type": "KeyError",
+  "message": "'user_id'",
+  "frames": [
+    {"file": "app/orders.py", "line": 42, "function": "get_order"}
+  ],
+  "repo_url": "",
+  "commit_sha": "",
+  "timestamp": ""
+}
