@@ -1,0 +1,10 @@
+{
+  "status": "fixed",
+  "final_diff": "",
+  "iteration_count": 0,
+  "test_results": {"fail_to_pass": "pass", "pass_to_pass": "pass"},
+  "sources_used": [],
+  "step_events": [
+    {"time": "", "step": "", "detail": ""}
+  ]
+}
