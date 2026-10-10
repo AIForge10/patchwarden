@@ -1,0 +1,12 @@
+{
+  "incident_id": "demo-001",
+  "repo_url": "https://github.com/ORG/checkout-demo",
+  "commit_sha": "<EXACT_40_HEX_COMMIT_SHA>",
+  "error_type": "TypeError",
+  "message": "Unexpected payment response",
+  "traceback": "Traceback (most recent call last): ...",
+  "reproducer_id": "checkout_malformed_response",
+  "sanitized_request": {"order_id": "order-123", "amount": 50},
+  "environment": {"provider_mode": "malformed"},
+  "timestamp": "2026-10-10T12:00:00Z"
+}
