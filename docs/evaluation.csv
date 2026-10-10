@@ -1,0 +1,1 @@
+case_id,variant_sha,run_id,seeded,blind,reproduced,patch_attempts,primary_verified,scenarios_proposed,secondary_confirmed,false_positive,pr_created,elapsed_seconds,failure_reason,evidence_hash

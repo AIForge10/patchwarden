@@ -1,0 +1,8 @@
+{
+  "version": "1.0",
+  "invariants": {
+    "at_most_one_charge": {"scenario_ids": ["retry_same_key"], "max_attempts": 3},
+    "failed_payment_not_completed": {"scenario_ids": ["gateway_decline"]},
+    "success_exactly_one_order": {"scenario_ids": ["normal_success"]}
+  }
+}
