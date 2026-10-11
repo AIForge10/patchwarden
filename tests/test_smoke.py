@@ -1,4 +1,4 @@
 def test_config_imports():
-    import config
+    from resolveloop import config
 
-    assert config.MAX_AGENT_ITERATIONS > 0
+    assert 1 <= config.MAX_PATCH_ATTEMPTS <= 5
