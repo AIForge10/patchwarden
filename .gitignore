@@ -37,3 +37,9 @@ runs/
 logs/
 *.log
 tmp/
+
+# ResolveLoop runtime output
+*.db
+*.sqlite3
+evidence/
+sandbox_output/

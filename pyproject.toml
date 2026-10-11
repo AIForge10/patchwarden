@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "resolveloop"
+version = "0.1.0"
+description = "Evidence-gated autonomous incident-response agent."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11,<3.12"
+# Loose ranges here; exact tested versions live in requirements.txt / requirements-dev.txt (lockfiles).
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic>=2",
+    "pydantic-settings>=2",
+    "python-dotenv",
+    "httpx",
+    "openai",          # OpenAI-compatible SDK for Nebius Token Factory
+    "tavily-python",
+    "e2b>=2",
+    "PyGithub",
+    "jinja2",          # post-mortem / PR body templates
+    "tenacity",        # retries for model + API calls
+    "unidiff",         # unified-diff parsing for patch policy
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+    "pip-tools",
+    "detect-secrets",
+]
+
+[tool.setuptools.packages.find]
+include = ["resolveloop*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
