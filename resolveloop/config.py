@@ -10,7 +10,8 @@ load_dotenv()
 
 NEBIUS_API_KEY = os.getenv("NEBIUS_API_KEY", "")
 NEBIUS_BASE_URL = os.getenv("NEBIUS_BASE_URL", "")
-NEBIUS_MODEL_ID = os.getenv("NEBIUS_MODEL_ID", "")
+NEBIUS_MODEL_REASONING = os.getenv("NEBIUS_MODEL_REASONING", "")
+NEBIUS_MODEL_FAST = os.getenv("NEBIUS_MODEL_FAST", "")
 
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 E2B_API_KEY = os.getenv("E2B_API_KEY", "")
