@@ -1,4 +1,5 @@
 """Send a signed, local demo alert to a running ResolveLoop API."""
+
 import argparse
 import hashlib
 import hmac
@@ -16,7 +17,12 @@ def main() -> None:
     args = parser.parse_args()
     body = args.fixture.read_bytes()
     signature = hmac.new(config.WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
-    response = httpx.post(args.url, content=body, headers={"X-ResolveLoop-Signature": f"sha256={signature}"}, timeout=10)
+    response = httpx.post(
+        args.url,
+        content=body,
+        headers={"X-ResolveLoop-Signature": f"sha256={signature}"},
+        timeout=10,
+    )
     response.raise_for_status()
     print(response.json())
 
