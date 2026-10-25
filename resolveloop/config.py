@@ -2,6 +2,7 @@
 
 Placeholder until the pydantic-settings `Settings` class from the plan (section 5) is built.
 """
+
 import os
 
 from dotenv import load_dotenv

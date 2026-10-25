@@ -3,6 +3,7 @@
 Run from the project root:
     python resolveloop/scripts/day_one/try_agent.py
 """
+
 import subprocess
 import sys
 from pathlib import Path
@@ -10,9 +11,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]  # repo root: day_one -> scripts -> resolveloop -> repo
 sys.path.insert(0, str(ROOT))
 
-from resolveloop.agent.context import read_context, select_context_paths
-from resolveloop.agent.nebius_client import healthcheck_model
-from resolveloop.agent.patcher import diagnose, propose_patch
+from resolveloop.agent.context import read_context, select_context_paths  # noqa: E402
+from resolveloop.agent.nebius_client import healthcheck_model  # noqa: E402
+from resolveloop.agent.patcher import diagnose, propose_patch  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 
@@ -20,7 +21,9 @@ HERE = Path(__file__).resolve().parent
 def main() -> None:
     failing = subprocess.run(
         [sys.executable, "-m", "pytest", "-q", "-x", "--no-header", "-p", "no:cacheprovider"],
-        cwd=HERE, capture_output=True, text=True,
+        cwd=HERE,
+        capture_output=True,
+        text=True,
     ).stdout
 
     print("--- healthcheck:", healthcheck_model())
@@ -32,8 +35,10 @@ def main() -> None:
     for attempt in (1, 2):
         p = propose_patch(failing, HERE, diagnosis=diagnosis)
         r = p.reply
-        print(f"--- call {attempt}: cached={r.cached} finish={r.finish_reason} "
-              f"tokens in/out={r.prompt_tokens}/{r.completion_tokens} files_read={p.paths_read}")
+        print(
+            f"--- call {attempt}: cached={r.cached} finish={r.finish_reason} "
+            f"tokens in/out={r.prompt_tokens}/{r.completion_tokens} files_read={p.paths_read}"
+        )
         if p.diff:
             print(p.diff)
         else:
