@@ -1,4 +1,5 @@
 """Context step: find the files a traceback names and read them safely. Owner: Satyabrata."""
+
 import difflib
 import re
 from pathlib import Path
@@ -6,7 +7,7 @@ from pathlib import Path
 # Matches both Python tracebacks:   File "/x/app/pay.py", line 6, in charge
 # and pytest output:                app/pay.py:6: in charge   /   app/pay.py:6: KeyError
 _PY_TRACE = re.compile(r'File "([^"]+)", line \d+')
-_PYTEST_LINE = re.compile(r'^\s*([\w./\\-]+\.py):\d+', re.M)
+_PYTEST_LINE = re.compile(r"^\s*([\w./\\-]+\.py):\d+", re.M)
 
 _NEVER_READ = (".env", ".pem", ".key", "secrets")
 _SKIP_PARTS = ("site-packages", "/lib/python", "<frozen", ".git/")
@@ -75,8 +76,10 @@ def parse_model_files(reply_text: str) -> dict:
 def make_unified_diff(path: str, old: str, new: str) -> str:
     """Build the unified diff ourselves, so the model never has to get hunk numbers right."""
     lines = difflib.unified_diff(
-        old.splitlines(keepends=True), new.splitlines(keepends=True),
-        fromfile=f"a/{path}", tofile=f"b/{path}",
+        old.splitlines(keepends=True),
+        new.splitlines(keepends=True),
+        fromfile=f"a/{path}",
+        tofile=f"b/{path}",
     )
     out = []
     for line in lines:

@@ -30,8 +30,9 @@ def build_diagnosis_prompt(traceback: str, files: dict, search_results: str = ""
     return "\n".join(parts)
 
 
-def build_patch_prompt(traceback: str, files: dict, feedback: str = "",
-                       diagnosis: str = "", attempt: int = 1) -> str:
+def build_patch_prompt(
+    traceback: str, files: dict, feedback: str = "", diagnosis: str = "", attempt: int = 1
+) -> str:
     """Ask for the full corrected content of each file that needs a change."""
     parts = ["A test fails. Here is the failure output:\n", traceback.strip(), "\n"]
     if files:

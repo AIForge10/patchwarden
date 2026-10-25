@@ -1,4 +1,5 @@
 """Offline tests for the Nebius client, context step and patcher. No network, no cost."""
+
 from types import SimpleNamespace
 
 import pytest
@@ -21,6 +22,7 @@ REPLY = f"FILE: buggy_checkout.py\n```python\n{NEW}```\n"
 
 class FakeClient:
     """Stands in for the OpenAI client and counts calls."""
+
     def __init__(self, text=REPLY, finish="stop"):
         self.calls = 0
         self.text, self.finish = text, finish
@@ -77,8 +79,8 @@ def test_read_context_blocks_traversal(tmp_path):
 def test_propose_patch_builds_diff(tmp_path, fake):
     (tmp_path / "buggy_checkout.py").write_text(OLD)
     result = patcher.propose_patch(TRACE, tmp_path)
-    assert "-    return r[\"data\"]" in result.diff
-    assert "+    return r.get(\"data\")" in result.diff
+    assert '-    return r["data"]' in result.diff
+    assert '+    return r.get("data")' in result.diff
     assert result.diff.startswith("--- a/buggy_checkout.py")
 
 
@@ -100,8 +102,10 @@ def test_healthcheck_reports_missing_model(monkeypatch):
 
 
 def test_diagnose_keeps_only_the_three_lines(tmp_path, fake):
-    fake.text = ("thinking...\nEVIDENCE: buggy_checkout.py:6 - no data key check\n"
-                 "HYPOTHESIS: KeyError on malformed response\nUNCERTAINTY: low - clear trace\n")
+    fake.text = (
+        "thinking...\nEVIDENCE: buggy_checkout.py:6 - no data key check\n"
+        "HYPOTHESIS: KeyError on malformed response\nUNCERTAINTY: low - clear trace\n"
+    )
     out = patcher.diagnose(TRACE, {"buggy_checkout.py": OLD})
     assert out.splitlines()[0].startswith("EVIDENCE: buggy_checkout.py:6")
     assert len(out.splitlines()) == 3
@@ -117,11 +121,14 @@ def test_patch_proposal_has_patch_candidate_fields(tmp_path, fake):
 
 def test_diff_marks_missing_final_newline(tmp_path):
     import subprocess
+
     old, new = "a = 1\nb = 2", "a = 1\nb = 3\n"
     (tmp_path / "f.py").write_text(old)
     diff = context.make_unified_diff("f.py", old, new)
     assert "\\ No newline at end of file" in diff
     (tmp_path / "p.diff").write_text(diff)
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
-    r = subprocess.run(["git", "apply", "--check", "p.diff"], cwd=tmp_path, capture_output=True, text=True)
+    r = subprocess.run(
+        ["git", "apply", "--check", "p.diff"], cwd=tmp_path, capture_output=True, text=True
+    )
     assert r.returncode == 0, r.stderr
