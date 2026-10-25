@@ -8,6 +8,7 @@ It shows you the model's reply, and you decide by hand if the fix is right.
 It does NOT edit your files: it writes the model's version to a temp copy and
 runs the tests against that copy.
 """
+
 import argparse
 import re
 import shutil
@@ -20,9 +21,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
-from openai import OpenAI
-
-import config
+import config  # noqa: E402
+from openai import OpenAI  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 BUGGY = HERE / "buggy_checkout.py"
@@ -31,7 +31,9 @@ BUGGY = HERE / "buggy_checkout.py"
 def run_tests(folder: Path) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, "-m", "pytest", "-q", "-x", "--no-header", "-p", "no:cacheprovider"],
-        cwd=folder, capture_output=True, text=True,
+        cwd=folder,
+        capture_output=True,
+        text=True,
     )
 
 
@@ -54,7 +56,9 @@ def main() -> None:
     if args.trace_only:
         evidence = f"Failing test output / stack trace:\n{trace}"
     else:
-        evidence = f"Failing test output / stack trace:\n{trace}\n\nSource file buggy_checkout.py:\n{code}"
+        evidence = (
+            f"Failing test output / stack trace:\n{trace}\n\nSource file buggy_checkout.py:\n{code}"
+        )
     prompt = (
         "A Python test fails. Fix the bug with the smallest change. "
         "Reply with ONLY the full corrected contents of buggy_checkout.py "
@@ -73,7 +77,9 @@ def main() -> None:
     print(text)
     print(f"\n[finish_reason: {finish}]")
     if finish == "length":
-        print("NOTE: the reply was cut off by the token limit (the model used it up while thinking).")
+        print(
+            "NOTE: the reply was cut off by the token limit (the model used it up while thinking)."
+        )
 
     # The model may think out loud and show code several times. The answer is the LAST block.
     blocks = re.findall(r"```python\n(.*?)```", text, re.S)
