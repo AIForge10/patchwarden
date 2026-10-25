@@ -8,6 +8,7 @@ Replay cache: the same request (model + system + prompt + max_tokens) is only
 sent to Nebius once. Later identical calls are read from .cache/nebius/ for free.
 Set NEBIUS_NO_CACHE=1 to turn the cache off.
 """
+
 import hashlib
 import json
 import os
@@ -63,31 +64,44 @@ def _read_cache(key: str):
 
 def _write_cache(key: str, reply: Reply) -> None:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    (CACHE_DIR / f"{key}.json").write_text(json.dumps({
-        "text": reply.text, "finish_reason": reply.finish_reason,
-        "prompt_tokens": reply.prompt_tokens, "completion_tokens": reply.completion_tokens,
-    }))
+    (CACHE_DIR / f"{key}.json").write_text(
+        json.dumps(
+            {
+                "text": reply.text,
+                "finish_reason": reply.finish_reason,
+                "prompt_tokens": reply.prompt_tokens,
+                "completion_tokens": reply.completion_tokens,
+            }
+        )
+    )
 
 
 # Only retry things that can succeed on a second try (network, rate limit, server errors).
 # A wrong model name or bad key will NOT be retried: it fails fast with a clear message.
 @retry(
-    retry=retry_if_exception_type((
-        openai.APIConnectionError, openai.APITimeoutError,
-        openai.RateLimitError, openai.InternalServerError,
-    )),
+    retry=retry_if_exception_type(
+        (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.RateLimitError,
+            openai.InternalServerError,
+        )
+    ),
     wait=wait_exponential(multiplier=2, min=2, max=30),
     stop=stop_after_attempt(4),
     reraise=True,
 )
 def _call_api(model: str, messages: list, max_tokens: int):
     return get_client().chat.completions.create(
-        model=model, messages=messages, max_tokens=max_tokens,
+        model=model,
+        messages=messages,
+        max_tokens=max_tokens,
     )
 
 
-def chat_full(prompt: str, system: str = "", model: str = "",
-              max_tokens: int = 4000, use_cache: bool = True) -> Reply:
+def chat_full(
+    prompt: str, system: str = "", model: str = "", max_tokens: int = 4000, use_cache: bool = True
+) -> Reply:
     """Send one prompt and return a Reply (text, finish_reason, cached, token counts)."""
     model = model or config.NEBIUS_MODEL_REASONING
     if not model:
@@ -98,11 +112,17 @@ def chat_full(prompt: str, system: str = "", model: str = "",
     if use_cache:
         hit = _read_cache(key)
         if hit:
-            return Reply(hit["text"], hit["finish_reason"], True,
-                         hit.get("prompt_tokens", 0), hit.get("completion_tokens", 0))
+            return Reply(
+                hit["text"],
+                hit["finish_reason"],
+                True,
+                hit.get("prompt_tokens", 0),
+                hit.get("completion_tokens", 0),
+            )
 
-    messages = ([{"role": "system", "content": system}] if system else []) + \
-               [{"role": "user", "content": prompt}]
+    messages = ([{"role": "system", "content": system}] if system else []) + [
+        {"role": "user", "content": prompt}
+    ]
     resp = _call_api(model, messages, max_tokens)
     choice = resp.choices[0]
     usage = getattr(resp, "usage", None)
@@ -119,8 +139,9 @@ def chat_full(prompt: str, system: str = "", model: str = "",
     return reply
 
 
-def chat(prompt: str, system: str = "", model: str = "",
-         max_tokens: int = 4000, use_cache: bool = True) -> str:
+def chat(
+    prompt: str, system: str = "", model: str = "", max_tokens: int = 4000, use_cache: bool = True
+) -> str:
     """Same as chat_full but returns only the text."""
     return chat_full(prompt, system, model, max_tokens, use_cache).text
 

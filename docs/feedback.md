@@ -41,3 +41,8 @@ Running notes from building ResolveLoop. Facts only: what we ran and what happen
 - `healthcheck_model()` confirmed both configured models are available to our key.
 - Diagnosis prompt returned the required format: `EVIDENCE: buggy_checkout.py:6 ...`, a correct hypothesis, and `UNCERTAINTY: medium`.
 - Patch call cost 733 input and 572 output tokens on Super. A repeated identical call was served from our local replay cache with no API request.
+# Feedback log
+
+| Date | Area | Finding | Outcome |
+| --- | --- | --- | --- |
+| 2026-10-25 | Baseline demo | The malformed gateway case is intentionally red before repair. | Preserve as an explicit reproducer. |
