@@ -1,8 +1,9 @@
-"""Turn one failure into a proposed patch; A5 owns the retry loop."""
+"""Turn one failure into a proposed patch, and retry until the verifier accepts one."""
 
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from resolveloop import config
 from resolveloop.agent.context import (
     make_unified_diff,
     parse_model_files,
@@ -16,6 +17,11 @@ from resolveloop.agent.prompts import (
     build_diagnosis_prompt,
     build_patch_prompt,
 )
+from resolveloop.models import PatchCandidate, RunStatus
+from resolveloop.sandbox.repository import reset_to_commit
+from resolveloop.verifier.baseline import failure_output
+from resolveloop.verifier.patch_policy import parse_changed_paths
+from resolveloop.verifier.verify import VerifyOutcome, run_verification
 
 
 @dataclass
@@ -98,3 +104,47 @@ def propose_patch(
             base_sha,
         )
     return PatchProposal(diff, new_files, paths, reply, "", diagnosis, attempt, base_sha)
+
+
+def _no_step(status, message, metadata=None):
+    pass
+
+
+def repair_until_verified(
+    incident, sandbox, baseline: dict, diagnosis: str = "", max_attempts: int = 0, step=_no_step
+) -> tuple[PatchCandidate | None, VerifyOutcome | None]:
+    """A5: propose -> verify, at most max_attempts times, each from a clean pinned checkout.
+
+    Returns the first VERIFIED candidate, or (None, last outcome). There is no silent
+    success: only run_verification can produce VERIFIED. `step(status, message, metadata)`
+    reports progress to the orchestrator.
+    """
+    max_attempts = max_attempts or config.MAX_PATCH_ATTEMPTS
+    sha = baseline["baseline_sha"]
+    repo = sandbox.root / "repo"
+    failure = failure_output(baseline)
+    feedback, outcome = "", None
+    for attempt in range(1, max_attempts + 1):
+        info = {"attempt": attempt}
+        step(RunStatus.PATCHING, f"Attempt {attempt} of {max_attempts}: requesting a patch", info)
+        reset_to_commit(sandbox, sha)  # context must come from the pinned files, not a past try
+        proposal = propose_patch(failure, repo, feedback, attempt, diagnosis, sha)
+        if not proposal.unified_diff:
+            feedback = f"Your previous reply was not usable: {proposal.problem}."
+            step(RunStatus.PATCHING, f"Attempt {attempt}: {proposal.problem}", info)
+            continue
+        candidate = PatchCandidate(
+            base_sha=sha,
+            unified_diff=proposal.unified_diff,
+            rationale=diagnosis,
+            attempt=attempt,
+            touched_paths=parse_changed_paths(proposal.unified_diff),
+        )
+        paths = ", ".join(candidate.touched_paths)
+        step(RunStatus.VERIFYING, f"Attempt {attempt}: verifying a patch to {paths}", info)
+        outcome = run_verification(sandbox, baseline, candidate)
+        if outcome.result.status == "VERIFIED":
+            return candidate, outcome
+        feedback = outcome.reason
+        step(RunStatus.VERIFYING, f"Attempt {attempt}: {outcome.result.status}", info)
+    return None, outcome
