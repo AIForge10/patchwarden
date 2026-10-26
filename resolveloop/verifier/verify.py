@@ -1,29 +1,47 @@
-from resolveloop.models import VerificationResult
+"""After-patch verifier: the verifier, never the model, sets VERIFIED. Owner: Satyabrata."""
+
+import shutil
+from dataclasses import dataclass, field
+
+from resolveloop.models import CommandResult, VerificationResult
 from resolveloop.sandbox.commands import run_regression_suite, run_reproducer
+from resolveloop.sandbox.repository import apply_unified_diff, reset_to_commit
 
 from .baseline import _sha256
 from .patch_policy import assert_safe_patch
 
+_FEEDBACK_CHARS = 3000  # tail of failing output handed back to the model
 
-def verify_patch(handle, baseline: dict, patch) -> VerificationResult:
+
+@dataclass
+class VerifyOutcome:
+    result: VerificationResult
+    commands: dict[str, CommandResult] = field(default_factory=dict)
+    reason: str = ""  # why it did not verify; becomes the next attempt's feedback
+
+
+def run_verification(handle, baseline: dict, patch) -> VerifyOutcome:
+    """Fresh pinned checkout + patch, then reproducer, original suite and protected hashes."""
+    red = baseline["reproducer_failed"]
     try:
         assert_safe_patch(patch.unified_diff, baseline["test_hashes"])
-    except ValueError:
-        return VerificationResult(
-            baseline_red=baseline["reproducer_failed"], status="PATCH_REJECTED"
-        )
-    reproducer = run_reproducer(handle, "checkout_malformed_response")
+        reset_to_commit(handle, baseline["baseline_sha"])
+        apply_unified_diff(handle, patch.unified_diff)
+    except (ValueError, RuntimeError) as error:
+        rejected = VerificationResult(baseline_red=red, status="PATCH_REJECTED")
+        return VerifyOutcome(rejected, reason=f"Patch rejected before running tests: {error}")
+    # .pyc files are trusted on (mtime seconds, size). A same-size patch applied within the
+    # same second would otherwise run the old bytecode and be judged on code it never changed.
+    for cache in (handle.root / "repo").rglob("__pycache__"):
+        shutil.rmtree(cache, ignore_errors=True)
+
+    reproducer = run_reproducer(handle, baseline["reproducer_id"])
     suite = run_regression_suite(handle)
     actual_hashes = {path: _sha256(handle, path) for path in baseline["test_hashes"]}
     intact = actual_hashes == baseline["test_hashes"]
-    passed = (
-        baseline["reproducer_failed"]
-        and reproducer.exit_code == 0
-        and suite.exit_code == 0
-        and intact
-    )
-    return VerificationResult(
-        baseline_red=baseline["reproducer_failed"],
+    passed = red and reproducer.exit_code == 0 and suite.exit_code == 0 and intact
+    result = VerificationResult(
+        baseline_red=red,
         reproducer_green=reproducer.exit_code == 0,
         suite_green=suite.exit_code == 0,
         paths_safe=True,
@@ -31,6 +49,22 @@ def verify_patch(handle, baseline: dict, patch) -> VerificationResult:
         status="VERIFIED" if passed else "VERIFY_FAILED",
     )
 
+    reasons = []
+    if reproducer.exit_code != 0:
+        reasons.append(
+            "The incident reproducer still fails:\n" + reproducer.stdout[-_FEEDBACK_CHARS:]
+        )
+    if suite.exit_code != 0:
+        reasons.append("The original test suite now fails:\n" + suite.stdout[-_FEEDBACK_CHARS:])
+    if not intact:
+        reasons.append("Protected test or contract files changed.")
+    commands = {"reproducer": reproducer, "suite": suite}
+    return VerifyOutcome(result, commands, "\n\n".join(reasons))
+
+
+def verify_patch(handle, baseline: dict, patch) -> VerificationResult:
+    return run_verification(handle, baseline, patch).result
+
 
 def verify_discovery_fix(handle, baseline: dict, scenario) -> VerificationResult:
-    return verify_patch(handle, baseline, scenario)
+    raise NotImplementedError("A6: needs the trusted scenario runner to re-run the oracle")

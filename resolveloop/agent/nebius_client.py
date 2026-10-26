@@ -27,6 +27,10 @@ TIMEOUT_SECONDS = 120
 _client = None  # created on first use; tests replace it with a fake
 
 
+class ModelUnavailable(RuntimeError):
+    """The model cannot be called at all (missing key, URL or model name)."""
+
+
 @dataclass
 class Reply:
     text: str
@@ -40,7 +44,7 @@ def get_client() -> OpenAI:
     global _client
     if _client is None:
         if not (config.NEBIUS_API_KEY and config.NEBIUS_BASE_URL):
-            raise RuntimeError("Fill NEBIUS_API_KEY and NEBIUS_BASE_URL in .env first.")
+            raise ModelUnavailable("Fill NEBIUS_API_KEY and NEBIUS_BASE_URL in .env first.")
         _client = OpenAI(
             api_key=config.NEBIUS_API_KEY,
             base_url=config.NEBIUS_BASE_URL,
@@ -105,7 +109,7 @@ def chat_full(
     """Send one prompt and return a Reply (text, finish_reason, cached, token counts)."""
     model = model or config.NEBIUS_MODEL_REASONING
     if not model:
-        raise RuntimeError("Set NEBIUS_MODEL_REASONING in .env first.")
+        raise ModelUnavailable("Set NEBIUS_MODEL_REASONING in .env first.")
     use_cache = use_cache and os.getenv("NEBIUS_NO_CACHE") != "1"
 
     key = _cache_key(model, system, prompt, max_tokens)
