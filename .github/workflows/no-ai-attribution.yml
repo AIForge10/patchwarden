@@ -1,0 +1,39 @@
+name: No AI attribution
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check commit messages
+        env:
+          RANGE: ${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || format('{0}..{1}', github.event.before, github.sha) }}
+        run: |
+          case "$RANGE" in 0000000000000000000000000000000000000000..*) RANGE="${RANGE#*..}~1..${RANGE#*..}" ;; esac
+          status=0
+          for sha in $(git rev-list "$RANGE"); do
+            git log -1 --format=%B "$sha" > msg.txt
+            if ! sh .githooks/commit-msg msg.txt; then
+              echo "::error::Commit $sha credits an AI agent"
+              status=1
+            fi
+          done
+          exit $status
+      - name: Check PR description
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s\n' "$PR_BODY" > body.txt
+          if ! sh .githooks/commit-msg body.txt; then
+            echo "::error::PR description credits an AI agent"
+            exit 1
+          fi
