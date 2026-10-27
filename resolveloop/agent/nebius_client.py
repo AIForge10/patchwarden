@@ -19,7 +19,7 @@ import openai
 from openai import OpenAI
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from resolveloop import config
+from resolveloop import config, ratelimit
 
 CACHE_DIR = Path(__file__).resolve().parents[2] / ".cache" / "nebius"  # repo root
 TIMEOUT_SECONDS = 120
@@ -110,6 +110,8 @@ def chat_full(
     model = model or config.NEBIUS_MODEL_REASONING
     if not model:
         raise ModelUnavailable("Set NEBIUS_MODEL_REASONING in .env first.")
+    if len(prompt) + len(system) > ratelimit.MODEL_MAX_PROMPT_CHARS:
+        raise ModelUnavailable("Prompt exceeds MODEL_MAX_PROMPT_CHARS")
     use_cache = use_cache and os.getenv("NEBIUS_NO_CACHE") != "1"
 
     key = _cache_key(model, system, prompt, max_tokens)
@@ -123,6 +125,9 @@ def chat_full(
                 hit.get("prompt_tokens", 0),
                 hit.get("completion_tokens", 0),
             )
+
+    if not ratelimit.limiter.allow("model", ratelimit.MODEL_LIMIT, ratelimit.WINDOW_SECONDS):
+        raise ModelUnavailable("Model rate limit exceeded")
 
     messages = ([{"role": "system", "content": system}] if system else []) + [
         {"role": "user", "content": prompt}

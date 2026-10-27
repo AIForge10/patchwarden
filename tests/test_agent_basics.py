@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from resolveloop.agent import context, nebius_client, patcher
+from resolveloop.agent.nebius_client import ModelUnavailable
 
 TRACE = """\
 buggy_checkout.py:10: in checkout
@@ -45,6 +46,29 @@ def fake(tmp_path, monkeypatch):
     monkeypatch.setattr(nebius_client.config, "NEBIUS_MODEL_REASONING", "test-model")
     monkeypatch.delenv("NEBIUS_NO_CACHE", raising=False)
     return f
+
+
+def test_model_rate_limit_blocks_uncached_calls(fake, monkeypatch):
+    monkeypatch.setattr(nebius_client.ratelimit, "MODEL_LIMIT", 1)
+    nebius_client.chat_full("first", max_tokens=10)
+    with pytest.raises(ModelUnavailable, match="rate limit"):
+        nebius_client.chat_full("second", max_tokens=10)
+    assert fake.calls == 1
+
+
+def test_cached_model_call_does_not_count_against_limit(fake, monkeypatch):
+    monkeypatch.setattr(nebius_client.ratelimit, "MODEL_LIMIT", 1)
+    first = nebius_client.chat_full("hello", max_tokens=50)
+    second = nebius_client.chat_full("hello", max_tokens=50)
+    assert not first.cached and second.cached
+    assert fake.calls == 1
+
+
+def test_oversized_prompt_never_reaches_the_api(fake, monkeypatch):
+    monkeypatch.setattr(nebius_client.ratelimit, "MODEL_MAX_PROMPT_CHARS", 8)
+    with pytest.raises(ModelUnavailable, match="MODEL_MAX_PROMPT_CHARS"):
+        nebius_client.chat_full("this is way too long")
+    assert fake.calls == 0
 
 
 def test_second_identical_call_is_cached(fake):

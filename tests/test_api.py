@@ -5,7 +5,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from resolveloop import config
+from resolveloop import config, ratelimit
 from resolveloop.api import webhooks
 from resolveloop.api.main import create_app
 from resolveloop.events import emit
@@ -53,6 +53,54 @@ def test_signed_webhook_is_accepted_and_deduplicated(tmp_path, monkeypatch) -> N
     assert [incident.incident_id for incident in started] == ["api-incident"]  # started once
     assert client.post("/webhooks/incident", content=body).status_code == 401
     assert len(started) == 1
+
+
+def _signed_alert(client: TestClient, incident_id: str, **overrides):
+    payload = {
+        "incident_id": incident_id,
+        "repo_url": "https://github.com/acme/checkout",
+        "commit_sha": "a" * 40,
+        "error_type": "ValidationError",
+        "message": "bad payment payload",
+        "traceback": "Traceback",
+        "reproducer_id": "checkout_malformed_response",
+        "timestamp": "2026-10-25T12:00:00Z",
+    } | overrides
+    body = json.dumps(payload).encode()
+    signature = hmac.new(b"test-secret", body, hashlib.sha256).hexdigest()
+    return client.post(
+        "/webhooks/incident",
+        content=body,
+        headers={"X-ResolveLoop-Signature": f"sha256={signature}"},
+    )
+
+
+def test_signed_webhook_is_rate_limited(tmp_path, monkeypatch) -> None:
+    _api_settings(tmp_path, monkeypatch)
+    monkeypatch.setattr(ratelimit, "WEBHOOK_LIMIT", 1)
+    monkeypatch.setattr(webhooks, "run_incident", lambda incident: None)
+    client = TestClient(create_app())
+    first = _signed_alert(client, "rate-one")
+    second = _signed_alert(client, "rate-two")
+    assert first.status_code == 202
+    assert second.status_code == 429
+    assert second.headers["retry-after"].isdigit()
+
+
+def test_oversized_webhook_is_rejected_before_a_run_starts(tmp_path, monkeypatch) -> None:
+    _api_settings(tmp_path, monkeypatch)
+    monkeypatch.setattr(ratelimit, "WEBHOOK_MAX_BODY_BYTES", 32)
+    started = []
+    monkeypatch.setattr(webhooks, "run_incident", lambda incident: started.append(incident))
+    client = TestClient(create_app())
+    body = b"x" * 64
+    signature = hmac.new(b"test-secret", body, hashlib.sha256).hexdigest()
+    response = client.post(
+        "/webhooks/incident",
+        content=body,
+        headers={"X-ResolveLoop-Signature": f"sha256={signature}"},
+    )
+    assert response.status_code == 413 and started == []
 
 
 def test_run_status_shows_pr_and_evidence_from_the_event_log(tmp_path, monkeypatch) -> None:
