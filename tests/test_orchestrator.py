@@ -1,5 +1,6 @@
 """End-to-end gate tests: real git checkout, real pytest in the sandbox, fake model only."""
 
+import json
 import os
 import shutil
 import subprocess
@@ -12,6 +13,7 @@ from resolveloop import config
 from resolveloop.agent import patcher
 from resolveloop.agent.nebius_client import Reply
 from resolveloop.agent.prompts import DIAGNOSIS_SYSTEM
+from resolveloop.discovery import scenarios
 from resolveloop.models import IncidentEvidence, RunStatus
 from resolveloop.orchestrator import run_incident
 from resolveloop.store import list_events
@@ -58,8 +60,22 @@ def target(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "ALLOWED_REPO_URL", str(repo))
     monkeypatch.setattr(config, "DATABASE_URL", f"sqlite:///{tmp_path / 'runs.db'}")
     monkeypatch.setattr(config, "MAX_PATCH_ATTEMPTS", 3)
+    monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", False)  # PR tests turn it back on
+    monkeypatch.setattr(config, "RUN_DISCOVERY", False)  # so do the discovery tests
     monkeypatch.chdir(tmp_path)  # evidence/ is written relative to the working directory
     return {"repo_url": str(repo), "sha": sha.strip()}
+
+
+def _commit_variant(target, path: str, old: str, new: str) -> str:
+    """Seed a disclosed defect on top of the target repo; returns the new pinned SHA."""
+    file = Path(target["repo_url"]) / path
+    source = file.read_text()
+    assert old in source
+    file.write_text(source.replace(old, new))
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-C"]
+    subprocess.run([*git, target["repo_url"], "commit", "-qam", "variant"], check=True)
+    sha = subprocess.check_output(["git", "-C", target["repo_url"], "rev-parse", "HEAD"], text=True)
+    return sha.strip()
 
 
 def _incident(target, **overrides) -> IncidentEvidence:
@@ -75,9 +91,32 @@ def _incident(target, **overrides) -> IncidentEvidence:
     return IncidentEvidence(**fields)
 
 
-def _fake_model(monkeypatch, patch_replies: list[str]) -> list[str]:
+SCENARIOS = [
+    {
+        "scenario_id": "retry_same_key",
+        "invariant_id": "at_most_one_charge",
+        "params": {"attempts": 2},
+    },
+    {
+        "scenario_id": "gateway_decline",
+        "invariant_id": "failed_payment_not_completed",
+        "params": {"decline_code": "declined"},
+    },
+    {
+        "scenario_id": "normal_success",
+        "invariant_id": "success_exactly_one_order",
+        "params": {"amount": 10},
+    },
+    {"scenario_id": "drop_database", "invariant_id": "at_most_one_charge", "params": {}},
+]
+
+
+def _fake_model(monkeypatch, patch_replies: list[str], scenario_reply: str = "") -> list[str]:
     """Diagnosis calls get DIAGNOSIS; patch calls get the next reply. Returns the patch prompts."""
     prompts = []
+    monkeypatch.setattr(
+        scenarios, "chat_full", lambda *args, **kwargs: Reply(scenario_reply, "stop", False)
+    )
 
     def chat_full(prompt, system="", model="", max_tokens=0, use_cache=True):
         if system == DIAGNOSIS_SYSTEM:
@@ -152,3 +191,90 @@ def test_unallowlisted_repo_fails_closed(target, monkeypatch) -> None:
 
     assert result.status == RunStatus.FAILED and prompts == []
     assert _failure_codes(result.run_id) == ["UNAUTHORIZED_REPO"]
+
+
+def test_verified_run_opens_pr_with_exactly_the_verified_code(
+    target, monkeypatch, fake_github
+) -> None:
+    monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", True)
+    fake_github.base_sha = target["sha"]
+    _fake_model(monkeypatch, [_file_reply("demo_app/app/main.py", FIX)])
+    result = run_incident(_incident(target))
+
+    assert result.status == RunStatus.PR_OPENED
+    assert result.pr_url == fake_github.pulls[0].html_url
+    (commit,) = fake_github.commits.values()
+    assert commit["parents"] == [target["sha"]]
+    assert commit["files"] == {"demo_app/app/main.py": ("100644", FIX)}
+    pull = fake_github.pulls[0]
+    assert pull.title == "[ResolveLoop] Verified repair for incident demo-001"
+    assert "HYPOTHESIS: malformed gateway response" in pull.body
+    assert '"patch_sha256"' in pull.body  # evidence manifest embedded for reviewers
+    events = list_events(result.run_id)
+    assert events[-1].stage == "PR_OPENED" and events[-1].metadata["pr_url"] == result.pr_url
+
+
+def test_github_error_keeps_verified_and_claims_no_pr(target, monkeypatch, fake_github) -> None:
+    monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", True)
+    fake_github.base_sha = target["sha"]
+    fake_github.fail_on = "create_pull"
+    _fake_model(monkeypatch, [_file_reply("demo_app/app/main.py", FIX)])
+    result = run_incident(_incident(target))
+
+    assert result.status == RunStatus.VERIFIED and result.pr_url is None
+    assert Path(result.evidence_path).is_file()  # verified evidence is preserved
+    assert _failure_codes(result.run_id) == ["GITHUB_ERROR"]
+    assert "PR_OPENED" not in [e.stage for e in list_events(result.run_id)]
+
+
+def test_discovery_challenges_the_patch_and_rejects_invented_scenarios(target, monkeypatch) -> None:
+    monkeypatch.setattr(config, "RUN_DISCOVERY", True)
+    _fake_model(monkeypatch, [_file_reply("demo_app/app/main.py", FIX)], json.dumps(SCENARIOS))
+    result = run_incident(_incident(target))
+
+    assert result.status == RunStatus.VERIFIED
+    assert [d.scenario.scenario_id for d in result.discoveries] == [
+        "retry_same_key",
+        "gateway_decline",
+        "normal_success",
+    ]  # the invented scenario never ran
+    assert not any(d.violated for d in result.discoveries)
+    stages = [e.stage for e in list_events(result.run_id)]
+    assert "CHALLENGING" in stages and "CONFIRMED_DISCOVERY" not in stages
+    messages = [e.message for e in list_events(result.run_id)]
+    assert any("Rejected a proposed scenario: drop_database" in m for m in messages)
+    manifest = json.loads(Path(result.evidence_path).read_text())
+    assert manifest["discovery"] == {"experimental": True, "scenarios_run": 3, "confirmed": []}
+
+
+def test_confirmed_second_defect_is_reported_not_repaired(target, monkeypatch, fake_github) -> None:
+    sha = _commit_variant(
+        target,
+        "demo_app/app/payments.py",
+        "    if idempotency_key not in _charges:\n        _charges[idempotency_key] = 1\n",
+        "    _charges[idempotency_key] = _charges.get(idempotency_key, 0) + 1\n",
+    )
+    monkeypatch.setattr(config, "RUN_DISCOVERY", True)
+    monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", True)
+    fake_github.base_sha = sha
+    _fake_model(monkeypatch, [_file_reply("demo_app/app/main.py", FIX)], json.dumps(SCENARIOS))
+    result = run_incident(_incident(target, commit_sha=sha))
+
+    assert result.status == RunStatus.PR_OPENED
+    (retry,) = [d for d in result.discoveries if d.violated]
+    assert retry.scenario.scenario_id == "retry_same_key" and retry.reproduced_twice
+    assert retry.observed == {"charge_count": 2}  # ran against the checkout, not this repo
+    stages = [e.stage for e in list_events(result.run_id)]
+    assert stages.index("CONFIRMED_DISCOVERY") < stages.index("PR_OPENED")
+    (commit,) = fake_github.commits.values()
+    assert list(commit["files"]) == ["demo_app/app/main.py"]  # only the verified fix ships
+    assert "**confirmed defect, unresolved**" in fake_github.pulls[0].body
+
+
+def test_unusable_scenario_reply_keeps_the_verified_repair(target, monkeypatch) -> None:
+    monkeypatch.setattr(config, "RUN_DISCOVERY", True)
+    _fake_model(monkeypatch, [_file_reply("demo_app/app/main.py", FIX)], "I cannot help.")
+    result = run_incident(_incident(target))
+
+    assert result.status == RunStatus.VERIFIED and result.discoveries == []
+    assert _failure_codes(result.run_id) == ["DISCOVERY_UNCONFIRMED"]

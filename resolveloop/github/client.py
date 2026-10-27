@@ -1,8 +1,8 @@
-"""Minimal GitHub publisher; never merges or deploys a change."""
+"""Minimal GitHub publisher; never merges or deploys a change. Owner: Satyabrata."""
 
 from __future__ import annotations
 
-from github import Github
+from github import Github, InputGitTreeElement, UnknownObjectException
 
 from resolveloop import config
 
@@ -18,16 +18,35 @@ def create_branch(base_sha: str, run_id: str) -> str:
     repo = _repo()
     try:
         repo.get_git_ref(f"heads/{branch}")
-    except Exception:
+    except UnknownObjectException:
         repo.create_git_ref(f"refs/heads/{branch}", base_sha)
     return branch
 
 
-def open_pull_request(branch: str, body: str) -> str:
+def commit_patch(branch: str, base_sha: str, files: dict[str, str], message: str) -> str:
+    """One commit on the pinned SHA holding only the verified files; returns its SHA.
+
+    The branch is ResolveLoop's own, so it is force-moved to this commit: a retried
+    publish replaces the earlier commit instead of stacking on it.
+    """
+    if not files:
+        raise ValueError("nothing to commit")
+    repo = _repo()
+    base = repo.get_git_commit(base_sha)
+    modes = {item.path: item.mode for item in repo.get_git_tree(base_sha, recursive=True).tree}
+    elements = [
+        InputGitTreeElement(path, modes.get(path, "100644"), "blob", content=content)
+        for path, content in sorted(files.items())
+    ]
+    tree = repo.create_git_tree(elements, base.tree)
+    commit = repo.create_git_commit(message, tree, [base])
+    repo.get_git_ref(f"heads/{branch}").edit(commit.sha, force=True)
+    return commit.sha
+
+
+def open_pull_request(branch: str, body: str, title: str = "[ResolveLoop] Verified repair") -> str:
     repo = _repo()
     existing = list(repo.get_pulls(state="open", head=f"{repo.owner.login}:{branch}"))
     if existing:
         return existing[0].html_url
-    return repo.create_pull(
-        title="[ResolveLoop] Verified repair", body=body, head=branch, base=repo.default_branch
-    ).html_url
+    return repo.create_pull(base=repo.default_branch, head=branch, title=title, body=body).html_url

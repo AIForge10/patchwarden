@@ -1,11 +1,12 @@
 import json
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from resolveloop.events import emit
 from resolveloop.models import IncidentEvidence
+from resolveloop.orchestrator import run_incident
 from resolveloop.security import assert_allowed_repo, verify_webhook_signature
-from resolveloop.store import create_run
+from resolveloop.store import create_run, get_run, list_events
 
 router = APIRouter()
 KNOWN_REPRODUCERS = {"checkout_malformed_response"}
@@ -22,7 +23,7 @@ def parse_alert(payload: dict) -> IncidentEvidence:
 
 
 @router.post("/webhooks/incident", status_code=202)
-async def incident_webhook(request: Request) -> dict:
+async def incident_webhook(request: Request, background: BackgroundTasks) -> dict:
     body = await request.body()
     settings = request.app.state.settings
     signature = request.headers.get("X-ResolveLoop-Signature")
@@ -36,5 +37,8 @@ async def incident_webhook(request: Request) -> dict:
     except (ValueError, json.JSONDecodeError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     run_id = create_run(incident)
-    emit(run_id, "RECEIVED", "Signed incident accepted", {"incident_id": incident.incident_id})
-    return {"run_id": run_id, "status": "RECEIVED"}
+    if not list_events(run_id):  # a duplicate alert must not start a second run
+        emit(run_id, "RECEIVED", "Signed incident accepted", {"incident_id": incident.incident_id})
+        background.add_task(run_incident, incident)
+        return {"run_id": run_id, "status": "RECEIVED"}
+    return {"run_id": run_id, "status": get_run(run_id).status.value}
