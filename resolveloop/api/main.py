@@ -6,6 +6,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from resolveloop import config
+from resolveloop.config import validate_startup
 from resolveloop.store import init_db
 
 from .runs import router as runs_router
@@ -16,6 +17,7 @@ UI_DIR = Path(__file__).resolve().parents[1] / "ui"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    validate_startup(app.state.settings)
     init_db()
     yield
 

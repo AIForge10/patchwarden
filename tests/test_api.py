@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
 from resolveloop import config
@@ -12,10 +13,23 @@ from resolveloop.models import IncidentEvidence, RunStatus
 from resolveloop.store import create_run, set_run_status
 
 
-def test_signed_webhook_is_accepted_and_deduplicated(tmp_path, monkeypatch) -> None:
+def _api_settings(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(config, "DATABASE_URL", f"sqlite:///{tmp_path / 'runs.db'}")
     monkeypatch.setattr(config, "WEBHOOK_SECRET", "test-secret")
     monkeypatch.setattr(config, "ALLOWED_REPO_URL", "https://github.com/acme/checkout")
+
+
+def test_api_refuses_to_start_without_webhook_secret(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(config, "DATABASE_URL", f"sqlite:///{tmp_path / 'runs.db'}")
+    monkeypatch.setattr(config, "WEBHOOK_SECRET", "")
+    monkeypatch.setattr(config, "ALLOWED_REPO_URL", "https://github.com/acme/checkout")
+    with pytest.raises(ValueError, match="WEBHOOK_SECRET"):
+        with TestClient(create_app()):
+            pass
+
+
+def test_signed_webhook_is_accepted_and_deduplicated(tmp_path, monkeypatch) -> None:
+    _api_settings(tmp_path, monkeypatch)
     started = []
     monkeypatch.setattr(webhooks, "run_incident", lambda incident: started.append(incident))
     payload = {
@@ -42,7 +56,7 @@ def test_signed_webhook_is_accepted_and_deduplicated(tmp_path, monkeypatch) -> N
 
 
 def test_run_status_shows_pr_and_evidence_from_the_event_log(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(config, "DATABASE_URL", f"sqlite:///{tmp_path / 'runs.db'}")
+    _api_settings(tmp_path, monkeypatch)
     monkeypatch.chdir(tmp_path)
     incident = IncidentEvidence(
         incident_id="ui-incident",
@@ -77,7 +91,7 @@ def test_run_status_shows_pr_and_evidence_from_the_event_log(tmp_path, monkeypat
 def test_recorded_run_replays_the_stored_event_log(tmp_path, monkeypatch) -> None:
     from resolveloop.scripts.record_run import record
 
-    monkeypatch.setattr(config, "DATABASE_URL", f"sqlite:///{tmp_path / 'runs.db'}")
+    _api_settings(tmp_path, monkeypatch)
     incident = IncidentEvidence(
         incident_id="rec-incident",
         repo_url="https://github.com/acme/checkout",

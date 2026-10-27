@@ -1,30 +1,102 @@
-"""Central place to read settings from environment variables.
+"""Settings from environment variables. Owner: Satyabrata.
 
-Placeholder until the pydantic-settings `Settings` class from the plan (section 5) is built.
+Plan section 5: validated Settings, get_settings, validate_startup, public_config.
+Module-level names stay so callers and tests can keep reading `config.MAX_PATCH_ATTEMPTS`
+and monkeypatching individual fields.
 """
 
-import os
+from __future__ import annotations
 
-from dotenv import load_dotenv
+import sys
+from functools import lru_cache
+from typing import Any
 
-load_dotenv()
+from pydantic import Field, ValidationError
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-NEBIUS_API_KEY = os.getenv("NEBIUS_API_KEY", "")
-NEBIUS_BASE_URL = os.getenv("NEBIUS_BASE_URL", "")
-NEBIUS_MODEL_REASONING = os.getenv("NEBIUS_MODEL_REASONING", "")
-NEBIUS_MODEL_FAST = os.getenv("NEBIUS_MODEL_FAST", "")
+_SECRET_FIELDS = frozenset(
+    {
+        "NEBIUS_API_KEY",
+        "TAVILY_API_KEY",
+        "E2B_API_KEY",
+        "GITHUB_TOKEN",
+        "WEBHOOK_SECRET",
+    }
+)
 
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
-E2B_API_KEY = os.getenv("E2B_API_KEY", "")
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
-GITHUB_OWNER = os.getenv("GITHUB_OWNER", "")
-GITHUB_TARGET_REPO = os.getenv("GITHUB_TARGET_REPO", "")
-WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
-ALLOWED_REPO_URL = os.getenv("ALLOWED_REPO_URL", "")
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./resolveloop.db")
-MAX_PATCH_ATTEMPTS = int(os.getenv("MAX_PATCH_ATTEMPTS", "3"))
-MAX_SCENARIOS = int(os.getenv("MAX_SCENARIOS", "4"))
-SANDBOX_TIMEOUT_SECONDS = int(os.getenv("SANDBOX_TIMEOUT_SECONDS", "180"))
-RUN_DISCOVERY = os.getenv("RUN_DISCOVERY", "true").lower() == "true"
-OPEN_PR_ON_VERIFIED = os.getenv("OPEN_PR_ON_VERIFIED", "true").lower() == "true"
+class Settings(BaseSettings):
+    """Every plan-section-5 variable. Secrets are never included in public_config or repr."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=True,
+    )
+
+    NEBIUS_API_KEY: str = ""
+    NEBIUS_BASE_URL: str = ""
+    NEBIUS_MODEL_REASONING: str = ""
+    NEBIUS_MODEL_FAST: str = ""
+    TAVILY_API_KEY: str = ""
+    E2B_API_KEY: str = ""
+    GITHUB_TOKEN: str = ""
+    GITHUB_OWNER: str = ""
+    GITHUB_TARGET_REPO: str = ""
+    WEBHOOK_SECRET: str = ""
+    ALLOWED_REPO_URL: str = ""
+    DATABASE_URL: str = "sqlite:///./resolveloop.db"
+    MAX_PATCH_ATTEMPTS: int = Field(default=3, ge=1, le=5)
+    MAX_SCENARIOS: int = Field(default=4, ge=0, le=5)
+    SANDBOX_TIMEOUT_SECONDS: int = Field(default=180, ge=1)
+    RUN_DISCOVERY: bool = True
+    OPEN_PR_ON_VERIFIED: bool = True
+
+    def __repr__(self) -> str:
+        return f"Settings({public_config(self)})"
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+def validate_startup(settings: Any) -> None:
+    """Fail closed before the API accepts alerts.
+
+    Ranges are always checked. WEBHOOK_SECRET and ALLOWED_REPO_URL are required to
+    start: a signed allowlisted alert is a P0 gate. Provider keys stay optional so
+    a machine without Nebius or GitHub can still serve the UI and recordings.
+    """
+    attempts = settings.MAX_PATCH_ATTEMPTS
+    scenarios = settings.MAX_SCENARIOS
+    if not (1 <= attempts <= 5):
+        raise ValueError("MAX_PATCH_ATTEMPTS must be in 1..5")
+    if not (0 <= scenarios <= 5):
+        raise ValueError("MAX_SCENARIOS must be in 0..5")
+    if not settings.WEBHOOK_SECRET:
+        raise ValueError("WEBHOOK_SECRET is required to start the API")
+    if not settings.ALLOWED_REPO_URL:
+        raise ValueError("ALLOWED_REPO_URL must be the exact allowlisted repository")
+
+
+def public_config(settings: Settings | None = None) -> dict[str, Any]:
+    """Return settings with secrets stripped. Safe to log or show in the UI."""
+    data = (settings or get_settings()).model_dump()
+    for key in _SECRET_FIELDS:
+        data.pop(key, None)
+    return data
+
+
+def _publish(settings: Settings) -> None:
+    module = sys.modules[__name__]
+    for name, value in settings.model_dump().items():
+        setattr(module, name, value)
+
+
+try:
+    _publish(get_settings())
+except ValidationError:
+    get_settings.cache_clear()
+    raise
