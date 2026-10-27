@@ -6,7 +6,7 @@ ResolveLoop is an evidence-gated incident-response prototype. It accepts a signe
 
 ```sh
 conda activate resolveloop
-make install
+make install      # also enables .githooks/ (blocks AI co-author trailers)
 make test
 make lint
 make secrets

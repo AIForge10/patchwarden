@@ -1,9 +1,12 @@
 # Run inside the conda env:  conda activate resolveloop
-.PHONY: install lock lint format test test-demo run serve probe incident record secrets
+.PHONY: install hooks lock lint format test test-demo run serve probe incident record secrets
 
-install:            ## install pinned deps + this package (editable)
+install: hooks      ## install pinned deps + this package (editable)
 	pip install -r requirements-dev.txt
 	pip install -e . --no-deps
+
+hooks:              ## use .githooks/ (commit-msg blocks AI co-author trailers)
+	git config core.hooksPath .githooks
 
 lock:               ## re-pin after editing pyproject.toml dependencies
 	pip-compile --strip-extras -o requirements.txt pyproject.toml
