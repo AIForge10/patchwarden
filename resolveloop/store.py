@@ -89,14 +89,36 @@ def list_events(run_id: str, after_seq: int = 0) -> list[RunEvent]:
         return [RunEvent.model_validate_json(row[0]) for row in rows]
 
 
+def _from_events(events: list[RunEvent], key: str) -> str | None:
+    """Latest value an event recorded for key: the event log is the source of truth."""
+    values = [event.metadata[key] for event in events if key in event.metadata]
+    return values[-1] if values else None
+
+
 def get_run(run_id: str) -> RunResult | None:
     with _connect() as db:
         row = db.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
     if row is None:
         return None
+    events = list_events(run_id)
+    status = RunStatus(row["status"])
     return RunResult(
         run_id=run_id,
-        status=RunStatus(row["status"]),
+        status=status,
         incident=IncidentEvidence.model_validate_json(row["incident_json"]),
-        events=list_events(run_id),
+        events=events,
+        evidence_path=_from_events(events, "evidence_path"),
+        # Only a run that reached PR_OPENED may show a PR link.
+        pr_url=_from_events(events, "pr_url") if status == RunStatus.PR_OPENED else None,
     )
+
+
+def list_runs(limit: int = 20) -> list[dict]:
+    init_db()
+    with _connect() as db:
+        rows = db.execute(
+            "SELECT run_id, incident_id, status, created_at FROM runs "
+            "ORDER BY rowid DESC LIMIT ?",  # arrival order; created_at is the alert's own time
+            (limit,),
+        )
+        return [dict(row) for row in rows]

@@ -22,7 +22,11 @@ def assert_allowed_repo(repo_url: str, sha: str, settings) -> None:
 
 def redact_text(value: str) -> str:
     value = re.sub(r"(?i)(authorization\s*[:=]\s*)(?:bearer\s+)?[^\s,]+", r"\1[REDACTED]", value)
-    value = re.sub(r"\b(?:gh[pousr]_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]+)\b", "[REDACTED]", value)
+    value = re.sub(
+        r"\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]+)\b",
+        "[REDACTED]",
+        value,
+    )
     value = re.sub(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b", "[REDACTED_EMAIL]", value)
     value = re.sub(r"\b(?:\d[ -]*?){13,16}\b", "[REDACTED_PAYMENT]", value)
     return value

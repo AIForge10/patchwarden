@@ -21,3 +21,8 @@ def test_allowlisted_repo_requires_exact_url_and_sha() -> None:
         assert_allowed_repo("https://github.com/a/other", "a" * 40, settings)
     with pytest.raises(ValueError):
         assert_allowed_repo("https://github.com/a/b", "main", settings)
+
+
+def test_fine_grained_github_tokens_are_redacted() -> None:
+    token = "github_pat_" + "A1b2" * 20  # pragma: allowlist secret
+    assert token not in redact_text(f"401 Bad credentials for {token}")
