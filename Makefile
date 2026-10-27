@@ -24,7 +24,7 @@ test-demo:          ## demo app suite (test_incident is expected RED on the seed
 run:
 	uvicorn resolveloop.api.main:app --reload --port 8000
 
-probe:              ## Nebius model probe (A1) - implement resolveloop/scripts/model_probe.py first
+probe:              ## Nebius model probe (A1)
 	python -m resolveloop.scripts.model_probe
 
 incident:           ## one incident end to end (real model; opens a PR if OPEN_PR_ON_VERIFIED + GitHub set)

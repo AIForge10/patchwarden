@@ -1,41 +1,35 @@
-"""Step 1: list the models your Nebius key can use, then send one test message.
+"""A1: list configured Nebius models, then send one cheap test message.
 
-Run from the project root:  python scripts/model_probe.py
+    python -m resolveloop.scripts.model_probe
+    make probe
 """
 
 import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-import config
-from openai import OpenAI
+from resolveloop import config
+from resolveloop.agent.nebius_client import ModelUnavailable, chat, healthcheck_model
 
 
 def main() -> None:
     if not config.NEBIUS_API_KEY or not config.NEBIUS_BASE_URL:
         sys.exit("Fill NEBIUS_API_KEY and NEBIUS_BASE_URL in .env first.")
+    try:
+        check = healthcheck_model()
+    except ModelUnavailable as error:
+        sys.exit(str(error))
 
-    client = OpenAI(api_key=config.NEBIUS_API_KEY, base_url=config.NEBIUS_BASE_URL)
+    print("Configured models:")
+    for name, info in check["models"].items():
+        mark = "available" if info["available"] else "MISSING"
+        print(f"  {name}: {info['id']} ({mark})")
+    if not check["ok"]:
+        sys.exit("A configured model ID is not available to this key.")
+    if not config.NEBIUS_MODEL_REASONING:
+        sys.exit("Set NEBIUS_MODEL_REASONING in .env first.")
 
-    print("Models available to your key:")
-    for model in client.models.list():
-        print("  ", model.id)
-
-    model_id = config.NEBIUS_MODEL_REASONING
-    if not model_id:
-        sys.exit(
-            "\nNow copy one NVIDIA Nemotron ID from the list above into "
-            "NEBIUS_MODEL_REASONING in .env, then run this again."
-        )
-
-    print(f"\nSending one test message to {model_id} ...")
-    reply = client.chat.completions.create(
-        model=model_id,
-        messages=[{"role": "user", "content": "Reply with the single word: ready"}],
-        max_tokens=20,
-    )
-    print("Model replied:", reply.choices[0].message.content)
+    print(f"\nSending one test message to {config.NEBIUS_MODEL_REASONING} ...")
+    reply = chat("Reply with the single word: ready", max_tokens=20, use_cache=False)
+    print("Model replied:", reply)
 
 
 if __name__ == "__main__":
