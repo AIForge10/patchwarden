@@ -58,7 +58,7 @@ A = Satyabrata (agent / sandbox / verifier), B = Atina (application / integratio
 | Path | Owner | Plan piece |
 |------|-------|------------|
 | `resolveloop/models.py` | Both | Frozen interfaces (day one) |
-| `resolveloop/config.py` | A | A2 (currently a simple placeholder) |
+| `resolveloop/config.py` | A | A2 validated Settings |
 | `resolveloop/agent/nebius.py`, `prompts.py`, `context.py`, `patcher.py`, `resolveloop/orchestrator.py` | A | A2, A5 |
 | `resolveloop/sandbox/` | A | A3 |
 | `resolveloop/verifier/` | A | A4 |
