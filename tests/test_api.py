@@ -30,7 +30,7 @@ def test_api_refuses_to_start_without_webhook_secret(tmp_path, monkeypatch) -> N
 
 def test_health_reports_ok_without_secrets(tmp_path, monkeypatch) -> None:
     _api_settings(tmp_path, monkeypatch)
-    monkeypatch.setattr(config, "NEBIUS_API_KEY", "secret-key")
+    monkeypatch.setattr(config, "NEBIUS_API_KEY", "dummy-key")  # pragma: allowlist secret
     monkeypatch.setattr(config, "NEBIUS_MODEL_REASONING", "nvidia/ok")
     monkeypatch.setattr(config, "GITHUB_TOKEN", "")
     monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", False)
@@ -42,7 +42,7 @@ def test_health_reports_ok_without_secrets(tmp_path, monkeypatch) -> None:
         "github_configured": False,
         "open_pr_on_verified": False,
     }
-    assert "secret-key" not in str(body)
+    assert "dummy-key" not in str(body)
     assert "test-secret" not in str(body)
 
 

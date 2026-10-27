@@ -8,8 +8,8 @@ from resolveloop.config import Settings, public_config, validate_startup
 
 def _settings(**overrides) -> Settings:
     fields = {
-        "NEBIUS_API_KEY": "secret-key",
-        "WEBHOOK_SECRET": "shared-secret",
+        "NEBIUS_API_KEY": "dummy-key",  # pragma: allowlist secret
+        "WEBHOOK_SECRET": "dummy-hook",  # pragma: allowlist secret
         "ALLOWED_REPO_URL": "https://github.com/acme/checkout",
         "MAX_PATCH_ATTEMPTS": 3,
         "MAX_SCENARIOS": 4,
@@ -24,8 +24,8 @@ def test_ranges_and_public_config_hide_secrets() -> None:
     assert public["ALLOWED_REPO_URL"] == "https://github.com/acme/checkout"
     assert "WEBHOOK_SECRET" not in public
     assert "NEBIUS_API_KEY" not in public
-    assert "secret-key" not in repr(settings)
-    assert "shared-secret" not in repr(settings)
+    assert "dummy-key" not in repr(settings)
+    assert "dummy-hook" not in repr(settings)
 
 
 def test_out_of_range_attempts_and_scenarios_are_rejected() -> None:
