@@ -6,7 +6,7 @@
 AGENTS='claude|anthropic|cursor|copilot|codex|openai|chatgpt|gemini|devin|aider|windsurf|codeium'
 
 if grep -inE "^[[:space:]]*co-authored-by:.*($AGENTS)" "$1" ||
-   grep -inE "generated (with|by) .*($AGENTS)" "$1"; then
+   grep -inE "^[^[:alnum:]]*generated (with|by) \[?($AGENTS)" "$1"; then
     echo >&2
     echo "commit-msg: AI agent attribution found in the commit message (line shown above)." >&2
     echo "Remove the Co-authored-by trailer or 'Generated with' footer; see AGENTS.md." >&2
