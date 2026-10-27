@@ -6,6 +6,7 @@ import pytest
 from github import GithubException, UnknownObjectException
 
 from resolveloop.github import client as github_client
+from resolveloop.ratelimit import limiter
 
 
 class FakeGitHubRepo:
@@ -72,6 +73,13 @@ class FakeGitHubRepo:
         )
         self.pulls.append(pull)
         return pull
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter() -> None:
+    limiter.reset()
+    yield
+    limiter.reset()
 
 
 @pytest.fixture

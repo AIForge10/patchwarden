@@ -2,6 +2,7 @@ import json
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
+from resolveloop import ratelimit
 from resolveloop.events import emit
 from resolveloop.models import IncidentEvidence
 from resolveloop.orchestrator import run_incident
@@ -26,9 +27,20 @@ def parse_alert(payload: dict) -> IncidentEvidence:
 async def incident_webhook(request: Request, background: BackgroundTasks) -> dict:
     body = await request.body()
     settings = request.app.state.settings
+    if len(body) > ratelimit.WEBHOOK_MAX_BODY_BYTES:
+        raise HTTPException(status_code=413, detail="webhook payload too large")
     signature = request.headers.get("X-ResolveLoop-Signature")
     if not verify_webhook_signature(body, signature, settings.WEBHOOK_SECRET):
         raise HTTPException(status_code=401, detail="invalid webhook signature")
+    if not ratelimit.limiter.allow(
+        "webhook", ratelimit.WEBHOOK_LIMIT, ratelimit.WINDOW_SECONDS
+    ):
+        wait = ratelimit.limiter.retry_after("webhook", ratelimit.WINDOW_SECONDS)
+        raise HTTPException(
+            status_code=429,
+            detail="webhook rate limit exceeded",
+            headers={"Retry-After": str(wait)},
+        )
     try:
         incident = parse_alert(json.loads(body))
         assert_allowed_repo(incident.repo_url, incident.commit_sha, settings)

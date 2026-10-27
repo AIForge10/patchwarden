@@ -2,9 +2,10 @@ import hashlib
 import hmac
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
-from resolveloop import config
+from resolveloop import config, ratelimit
 from resolveloop.api import webhooks
 from resolveloop.api.main import create_app
 from resolveloop.events import emit
@@ -12,10 +13,41 @@ from resolveloop.models import IncidentEvidence, RunStatus
 from resolveloop.store import create_run, set_run_status
 
 
-def test_signed_webhook_is_accepted_and_deduplicated(tmp_path, monkeypatch) -> None:
+def _api_settings(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(config, "DATABASE_URL", f"sqlite:///{tmp_path / 'runs.db'}")
     monkeypatch.setattr(config, "WEBHOOK_SECRET", "test-secret")
     monkeypatch.setattr(config, "ALLOWED_REPO_URL", "https://github.com/acme/checkout")
+
+
+def test_api_refuses_to_start_without_webhook_secret(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(config, "DATABASE_URL", f"sqlite:///{tmp_path / 'runs.db'}")
+    monkeypatch.setattr(config, "WEBHOOK_SECRET", "")
+    monkeypatch.setattr(config, "ALLOWED_REPO_URL", "https://github.com/acme/checkout")
+    with pytest.raises(ValueError, match="WEBHOOK_SECRET"):
+        with TestClient(create_app()):
+            pass
+
+
+def test_health_reports_ok_without_secrets(tmp_path, monkeypatch) -> None:
+    _api_settings(tmp_path, monkeypatch)
+    monkeypatch.setattr(config, "NEBIUS_API_KEY", "dummy-key")  # pragma: allowlist secret
+    monkeypatch.setattr(config, "NEBIUS_MODEL_REASONING", "nvidia/ok")
+    monkeypatch.setattr(config, "GITHUB_TOKEN", "")
+    monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", False)
+    client = TestClient(create_app())
+    body = client.get("/health").json()
+    assert body == {
+        "ok": True,
+        "model_configured": True,
+        "github_configured": False,
+        "open_pr_on_verified": False,
+    }
+    assert "dummy-key" not in str(body)
+    assert "test-secret" not in str(body)
+
+
+def test_signed_webhook_is_accepted_and_deduplicated(tmp_path, monkeypatch) -> None:
+    _api_settings(tmp_path, monkeypatch)
     started = []
     monkeypatch.setattr(webhooks, "run_incident", lambda incident: started.append(incident))
     payload = {
@@ -41,8 +73,56 @@ def test_signed_webhook_is_accepted_and_deduplicated(tmp_path, monkeypatch) -> N
     assert len(started) == 1
 
 
+def _signed_alert(client: TestClient, incident_id: str, **overrides):
+    payload = {
+        "incident_id": incident_id,
+        "repo_url": "https://github.com/acme/checkout",
+        "commit_sha": "a" * 40,
+        "error_type": "ValidationError",
+        "message": "bad payment payload",
+        "traceback": "Traceback",
+        "reproducer_id": "checkout_malformed_response",
+        "timestamp": "2026-10-25T12:00:00Z",
+    } | overrides
+    body = json.dumps(payload).encode()
+    signature = hmac.new(b"test-secret", body, hashlib.sha256).hexdigest()
+    return client.post(
+        "/webhooks/incident",
+        content=body,
+        headers={"X-ResolveLoop-Signature": f"sha256={signature}"},
+    )
+
+
+def test_signed_webhook_is_rate_limited(tmp_path, monkeypatch) -> None:
+    _api_settings(tmp_path, monkeypatch)
+    monkeypatch.setattr(ratelimit, "WEBHOOK_LIMIT", 1)
+    monkeypatch.setattr(webhooks, "run_incident", lambda incident: None)
+    client = TestClient(create_app())
+    first = _signed_alert(client, "rate-one")
+    second = _signed_alert(client, "rate-two")
+    assert first.status_code == 202
+    assert second.status_code == 429
+    assert second.headers["retry-after"].isdigit()
+
+
+def test_oversized_webhook_is_rejected_before_a_run_starts(tmp_path, monkeypatch) -> None:
+    _api_settings(tmp_path, monkeypatch)
+    monkeypatch.setattr(ratelimit, "WEBHOOK_MAX_BODY_BYTES", 32)
+    started = []
+    monkeypatch.setattr(webhooks, "run_incident", lambda incident: started.append(incident))
+    client = TestClient(create_app())
+    body = b"x" * 64
+    signature = hmac.new(b"test-secret", body, hashlib.sha256).hexdigest()
+    response = client.post(
+        "/webhooks/incident",
+        content=body,
+        headers={"X-ResolveLoop-Signature": f"sha256={signature}"},
+    )
+    assert response.status_code == 413 and started == []
+
+
 def test_run_status_shows_pr_and_evidence_from_the_event_log(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(config, "DATABASE_URL", f"sqlite:///{tmp_path / 'runs.db'}")
+    _api_settings(tmp_path, monkeypatch)
     monkeypatch.chdir(tmp_path)
     incident = IncidentEvidence(
         incident_id="ui-incident",
@@ -77,7 +157,7 @@ def test_run_status_shows_pr_and_evidence_from_the_event_log(tmp_path, monkeypat
 def test_recorded_run_replays_the_stored_event_log(tmp_path, monkeypatch) -> None:
     from resolveloop.scripts.record_run import record
 
-    monkeypatch.setattr(config, "DATABASE_URL", f"sqlite:///{tmp_path / 'runs.db'}")
+    _api_settings(tmp_path, monkeypatch)
     incident = IncidentEvidence(
         incident_id="rec-incident",
         repo_url="https://github.com/acme/checkout",
