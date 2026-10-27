@@ -1,5 +1,5 @@
 # Run inside the conda env:  conda activate resolveloop
-.PHONY: install lock lint format test test-demo run probe incident record secrets
+.PHONY: install lock lint format test test-demo run serve probe incident record secrets
 
 install:            ## install pinned deps + this package (editable)
 	pip install -r requirements-dev.txt
@@ -23,6 +23,9 @@ test-demo:          ## demo app suite (test_incident is expected RED on the seed
 
 run:
 	uvicorn resolveloop.api.main:app --reload --port 8000
+
+serve:              ## bind 0.0.0.0 (Docker / hosted). PORT defaults to 8000.
+	uvicorn resolveloop.api.main:app --host 0.0.0.0 --port $${PORT:-8000}
 
 probe:              ## Nebius model probe (A1)
 	python -m resolveloop.scripts.model_probe

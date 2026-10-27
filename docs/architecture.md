@@ -88,6 +88,24 @@ event. It never claims PR_OPENED without a URL. ResolveLoop never merges or depl
 `pr_url` and `evidence_path` on `GET /runs/{id}` are read back from the event log, which is
 the source of truth.
 
+## Hosted endpoint
+
+The API is a single Docker image (`Dockerfile`) that serves `/ui/`, `/health`, and the
+signed webhook. Hosts must inject env vars; the image never contains `.env`.
+
+```sh
+docker build -t resolveloop .
+docker run --rm -p 8000:8000 --env-file .env resolveloop
+# then GET http://127.0.0.1:8000/health  →  {"ok": true, ...}
+```
+
+`make serve` binds `0.0.0.0` and `PORT` (default 8000) for the same process without Docker.
+Required to boot: `WEBHOOK_SECRET`, `ALLOWED_REPO_URL`. Nebius and GitHub keys stay optional
+so the UI can replay recordings on a host that is not yet wired to the model.
+
+On a public URL set `OPEN_PR_ON_VERIFIED=false` until the final judged run. A hosted instance
+that can sign alerts and has a GitHub token would otherwise open a real PR.
+
 ## One command
 
 ```sh
@@ -107,4 +125,5 @@ records `GITHUB_ERROR`.
 | Nebius base URL and model IDs | Verified Oct 21 with `healthcheck_model()` (see `docs/feedback.md`) |
 | E2B | Not used yet: `sandbox/e2b_runner.py` is a local disposable-directory adapter with the same interface |
 | GitHub fine-grained token | Needs Contents + Pull requests read/write on the demo repo only; not yet exercised against the real API |
+| Hosted endpoint | Docker image + `GET /health`; deploy by injecting `.env` values. Real GitHub PR left for the final run |
 | Tavily | Not wired into diagnosis yet |
