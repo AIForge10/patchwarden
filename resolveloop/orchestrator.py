@@ -4,14 +4,21 @@ Runs the gate sequence from plan section 9. Every gate fails closed: when a step
 cannot prove its result, the run stops with a failure code instead of claiming success.
 """
 
+import json
+
 import openai
 
 from resolveloop import config
 from resolveloop.agent.context import paths_from_traceback, read_context
 from resolveloop.agent.nebius_client import ModelUnavailable
 from resolveloop.agent.patcher import diagnose, repair_until_verified
+from resolveloop.discovery.catalog import load_invariants
+from resolveloop.discovery.recheck import confirm_violation
+from resolveloop.discovery.scenarios import propose_scenarios
 from resolveloop.events import emit
-from resolveloop.models import IncidentEvidence, RunResult, RunStatus
+from resolveloop.github import client as github_client
+from resolveloop.models import DiscoveryResult, IncidentEvidence, RunResult, RunStatus
+from resolveloop.reporting.postmortem import render_pr_body
 from resolveloop.sandbox.e2b_runner import create_sandbox, destroy_sandbox
 from resolveloop.sandbox.repository import checkout_pinned_repo
 from resolveloop.security import assert_allowed_repo
@@ -28,8 +35,10 @@ _ALLOWED = {
     RunStatus.VERIFYING: {RunStatus.PATCHING, RunStatus.VERIFIED},
     RunStatus.VERIFIED: {RunStatus.CHALLENGING, RunStatus.PR_OPENED},
     RunStatus.CHALLENGING: {RunStatus.VERIFIED, RunStatus.CONFIRMED_DISCOVERY},
-    RunStatus.CONFIRMED_DISCOVERY: {RunStatus.PATCHING},
+    # -> VERIFIED: no secondary repair; the first verified patch ships, the defect is reported.
+    RunStatus.CONFIRMED_DISCOVERY: {RunStatus.PATCHING, RunStatus.VERIFIED},
 }
+CATALOG_PATH = "demo_app/contracts/invariants.json"  # inside the pinned checkout
 
 
 def advance(
@@ -132,11 +141,21 @@ def run_incident(incident: IncidentEvidence) -> RunResult:
             {"step": f"patched_{name}", "argv": command.argv, "exit_code": command.exit_code}
             for name, command in outcome.commands.items()
         ]
+        if config.RUN_DISCOVERY:
+            result.discoveries = challenge(result, handle)
         manifest = build_manifest(result, baseline["test_hashes"], commands)
         manifest["model_id"] = config.NEBIUS_MODEL_REASONING
+        if config.RUN_DISCOVERY:
+            manifest["discovery"] = {
+                "experimental": True,
+                "scenarios_run": len(result.discoveries),
+                "confirmed": [d.scenario.scenario_id for d in result.discoveries if _confirmed(d)],
+            }
         result.evidence_path = write_evidence_bundle(run_id, manifest)
         emit(run_id, "VERIFIED", "Evidence written", {"evidence_path": result.evidence_path})
-        return maybe_create_pr(result)
+        # Read the verified files now: the sandbox (still patched) is destroyed below.
+        files = {path: (repo / path).read_text() for path in patch.touched_paths}
+        return maybe_create_pr(result, files, manifest)
     except (ModelUnavailable, openai.OpenAIError) as error:
         return _fail(run_id, incident, "MODEL_UNAVAILABLE", f"{type(error).__name__}: {error}")
     except Exception as error:
@@ -146,15 +165,197 @@ def run_incident(incident: IncidentEvidence) -> RunResult:
             destroy_sandbox(handle)
 
 
-def maybe_create_pr(result: RunResult) -> RunResult:
-    if result.status != RunStatus.VERIFIED or not result.verification:
+def _confirmed(discovery: DiscoveryResult) -> bool:
+    return discovery.violated and discovery.reproduced_twice
+
+
+def _verdict(discovery: DiscoveryResult) -> str:
+    if _confirmed(discovery):
+        return "violated, reproduced twice"
+    return "violated once, not reproduced" if discovery.violated else "holds"
+
+
+def challenge(result: RunResult, handle) -> list[DiscoveryResult]:
+    """A6 (experimental): challenge the verified patch with trusted catalog scenarios.
+
+    The model only picks catalog IDs and bounded parameters; trusted runner code executes
+    them against the patched checkout and a trusted invariant judges each one, twice.
+    Discovery can never fail or downgrade the verified core repair: any problem here
+    ends as a recorded DISCOVERY_UNCONFIRMED / ORACLE_UNAVAILABLE event, back in VERIFIED.
+    """
+    run_id = result.run_id
+    advance(run_id, RunStatus.CHALLENGING, "Challenging the patch with trusted scenarios")
+    try:
+        catalog = load_invariants(handle.root / "repo" / CATALOG_PATH)
+    except (OSError, ValueError) as error:
+        emit(
+            run_id,
+            "CHALLENGING",
+            f"No trusted catalog: {error}",
+            {"failure_code": "ORACLE_UNAVAILABLE"},
+            "warning",
+        )
+        advance(run_id, RunStatus.VERIFIED, "Core repair verified; discovery skipped")
+        return []
+    try:
+        specs, rejected = propose_scenarios(
+            result.incident, result.patch, catalog, config.MAX_SCENARIOS
+        )
+    except (ModelUnavailable, openai.OpenAIError) as error:
+        specs, rejected = [], [f"{type(error).__name__}: {error}"]
+    for reason in rejected:
+        emit(run_id, "CHALLENGING", f"Rejected a proposed scenario: {reason}", severity="warning")
+    if not specs:
+        emit(
+            run_id,
+            "CHALLENGING",
+            "Model proposed no valid catalog scenario",
+            {"failure_code": "DISCOVERY_UNCONFIRMED"},
+            "warning",
+        )
+        advance(run_id, RunStatus.VERIFIED, "Core repair verified; no scenario was run")
+        return []
+
+    discoveries = []
+    for spec in specs:
+        label = f"{spec.scenario_id} {spec.params} vs {spec.invariant_id}"
+        try:
+            found = confirm_violation(handle, spec, catalog, result.patch.base_sha)
+        except Exception as error:
+            emit(
+                run_id,
+                "CHALLENGING",
+                f"{label}: could not run ({type(error).__name__})",
+                {"failure_code": "ORACLE_UNAVAILABLE"},
+                "warning",
+            )
+            continue
+        discoveries.append(found)
+        emit(
+            run_id,
+            "CHALLENGING",
+            f"{label}: {_verdict(found)}",
+            {
+                "scenario_id": spec.scenario_id,
+                "observed": found.observed,
+                "rationale": spec.rationale,
+            },
+        )
+
+    confirmed = [d for d in discoveries if _confirmed(d)]
+    if confirmed:
+        ids = ", ".join(d.scenario.scenario_id for d in confirmed)
+        advance(
+            run_id,
+            RunStatus.CONFIRMED_DISCOVERY,
+            f"Confirmed a second defect: {ids}",
+            {"scenarios": ids},
+            "warning",
+        )
+        advance(
+            run_id,
+            RunStatus.VERIFIED,
+            "Second defect reported, not repaired: the PR carries only the verified incident fix",
+        )
+    else:
+        if any(d.violated for d in discoveries):
+            emit(
+                run_id,
+                "CHALLENGING",
+                "A violation did not reproduce; not claimed",
+                {"failure_code": "DISCOVERY_UNCONFIRMED"},
+                "warning",
+            )
+        advance(
+            run_id,
+            RunStatus.VERIFIED,
+            f"No confirmed second defect in {len(discoveries)} scenario(s)",
+        )
+    return discoveries
+
+
+def _discovery_section(discoveries: list[DiscoveryResult]) -> list[str]:
+    if not discoveries:
+        return []
+    rows = ["| Scenario | Params | Invariant | Observed | Result |", "|---|---|---|---|---|"]
+    for d in discoveries:
+        outcome = "**confirmed defect, unresolved**" if _confirmed(d) else _verdict(d)
+        rows.append(
+            f"| `{d.scenario.scenario_id}` | `{json.dumps(d.scenario.params)}` | "
+            f"`{d.oracle_id}` | `{json.dumps(d.observed)}` | {outcome} |"
+        )
+    return [
+        "## Additional scenarios (experimental)",
+        "Chosen by the model from the human-authored catalog; judged by trusted invariant "
+        "code against the patched checkout, each run twice. A confirmed defect is reported "
+        "here only: it is not repaired in this PR.",
+        "\n".join(rows),
+    ]
+
+
+def _pr_body(result: RunResult, manifest: dict) -> str:
+    patch = result.patch
+    details = [
+        "## Root-cause hypothesis",
+        patch.rationale or "No diagnosis was produced.",
+        "## Changed paths",
+        "\n".join(f"- `{path}`" for path in patch.touched_paths),
+        f"Verified on attempt {patch.attempt} of {config.MAX_PATCH_ATTEMPTS}.",
+        *_discovery_section(result.discoveries),
+        "## Evidence manifest",
+        f"<details><summary>{result.run_id}</summary>\n\n```json\n"
+        f"{json.dumps(manifest, indent=2, sort_keys=True)}\n```\n</details>",
+    ]
+    return render_pr_body(result) + "\n\n" + "\n\n".join(details)
+
+
+def maybe_create_pr(
+    result: RunResult, files: dict[str, str] | None = None, manifest: dict | None = None
+) -> RunResult:
+    """Open a human-review PR, only for a fully verified result. Never merges.
+
+    A GitHub failure leaves the run VERIFIED with its evidence and a GITHUB_ERROR
+    event: never a PR_OPENED claim without a PR URL.
+    """
+    verification = result.verification
+    if result.status != RunStatus.VERIFIED or not verification or not result.patch or not files:
         return result
     if not all(
         (
-            result.verification.reproducer_green,
-            result.verification.suite_green,
-            result.verification.oracle_intact,
+            verification.baseline_red,
+            verification.reproducer_green,
+            verification.suite_green,
+            verification.oracle_intact,
         )
     ):
         return result
-    return result
+    if not config.OPEN_PR_ON_VERIFIED:
+        emit(result.run_id, "VERIFIED", "PR step disabled by OPEN_PR_ON_VERIFIED")
+        return result
+
+    incident_id = result.incident.incident_id
+    try:
+        branch = github_client.create_branch(result.patch.base_sha, result.run_id)
+        message = f"ResolveLoop: verified repair for incident {incident_id}\n\nRun: {result.run_id}"
+        commit_sha = github_client.commit_patch(branch, result.patch.base_sha, files, message)
+        url = github_client.open_pull_request(
+            branch,
+            _pr_body(result, manifest or {}),
+            title=f"[ResolveLoop] Verified repair for incident {incident_id}",
+        )
+    except Exception as error:
+        emit(
+            result.run_id,
+            "VERIFIED",
+            f"Verified, but the PR was not opened: {type(error).__name__}: {error}",
+            {"failure_code": "GITHUB_ERROR"},
+            severity="error",
+        )
+        return result
+    advance(
+        result.run_id,
+        RunStatus.PR_OPENED,
+        f"Opened human-review PR {url}",
+        {"pr_url": url, "branch": branch, "commit_sha": commit_sha},
+    )
+    return result.model_copy(update={"status": RunStatus.PR_OPENED, "pr_url": url})

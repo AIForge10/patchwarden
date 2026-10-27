@@ -54,3 +54,38 @@ def build_patch_prompt(
         "contents of that file. Only include files you changed. No explanations."
     )
     return "\n".join(parts)
+
+
+SCENARIO_SYSTEM = (
+    "You are a QA engineer challenging a bug fix. You may only choose scenarios from the "
+    "catalog you are given. Never invent scenario IDs, invariants, code or expected results."
+)
+
+# What each trusted scenario accepts; validate_scenario enforces the same bounds.
+SCENARIO_PARAMS = {
+    "retry_same_key": '{"attempts": 2 or 3}',
+    "gateway_decline": '{"decline_code": "declined"}',
+    "normal_success": '{"amount": integer from 1 to 1000}',
+}
+
+
+def build_scenario_prompt(incident, patch, invariants: dict) -> str:
+    """Select catalog scenario IDs and parameter values only; the oracle stays trusted code."""
+    lines = []
+    for invariant_id, spec in invariants["invariants"].items():
+        for scenario_id in spec["scenario_ids"]:
+            params = SCENARIO_PARAMS.get(scenario_id, "{}")
+            lines.append(f"- invariant {invariant_id}: scenario {scenario_id}, params {params}")
+    return "\n".join(
+        [
+            f"Incident {incident.incident_id}: {incident.error_type}: {incident.message}",
+            "This verified patch fixed it:",
+            f"```diff\n{patch.unified_diff.strip()}\n```",
+            "Which behaviours of the payment code might still be wrong nearby? Pick the "
+            "scenarios most likely to expose a remaining defect, from this catalog only:",
+            *lines,
+            "Reply with ONLY a JSON array, most promising first, for example:\n"
+            '[{"scenario_id": "...", "invariant_id": "...", "params": {...}, '
+            '"rationale": "<one sentence>"}]',
+        ]
+    )
