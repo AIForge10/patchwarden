@@ -12,6 +12,7 @@ from resolveloop import config
 from resolveloop.agent.context import paths_from_traceback, read_context
 from resolveloop.agent.nebius_client import ModelUnavailable
 from resolveloop.agent.patcher import diagnose, repair_until_verified
+from resolveloop.agent.research import format_sources, search_error
 from resolveloop.discovery.catalog import load_invariants
 from resolveloop.discovery.recheck import confirm_violation
 from resolveloop.discovery.scenarios import propose_scenarios
@@ -83,9 +84,25 @@ def run_incident(incident: IncidentEvidence) -> RunResult:
         advance(run_id, RunStatus.BASELINING, "Checking out the pinned commit in a fresh sandbox")
         handle = create_sandbox(run_id)
         checkout_pinned_repo(handle, incident.repo_url, incident.commit_sha)
-        baseline = capture_baseline(handle, incident)
-        if baseline["reproducer"]["exit_code"] == 124:
-            return _fail(run_id, incident, "SANDBOX_TIMEOUT", "Reproducer timed out")
+        try:
+            baseline = capture_baseline(handle, incident)
+        except ValueError as error:
+            if "unknown reproducer" in str(error).lower():
+                advance(
+                    run_id,
+                    RunStatus.UNREPRODUCED,
+                    "Unknown reproducer_id; nothing verified to repair",
+                    {"reproducer_id": incident.reproducer_id},
+                    severity="warning",
+                )
+                return RunResult(run_id=run_id, status=RunStatus.UNREPRODUCED, incident=incident)
+            return _fail(run_id, incident, "INVALID_ALERT", str(error))
+        timed_out = (
+            baseline["reproducer"]["exit_code"] == 124
+            or baseline["original_suite"]["exit_code"] == 124
+        )
+        if timed_out:
+            return _fail(run_id, incident, "SANDBOX_TIMEOUT", "Sandbox command timed out")
         if not baseline["reproducer_failed"]:
             advance(
                 run_id,
@@ -104,7 +121,25 @@ def run_incident(incident: IncidentEvidence) -> RunResult:
         )
         failure = failure_output(baseline)
         repo = handle.root / "repo"
-        diagnosis = diagnose(failure, read_context(repo, paths_from_traceback(failure, repo)))
+        files = read_context(repo, paths_from_traceback(failure, repo))
+        sources: list[dict] = []
+        try:
+            sources = search_error(f"{incident.error_type}: {incident.message}")
+        except Exception as error:
+            emit(
+                run_id,
+                "DIAGNOSING",
+                f"Web search skipped ({type(error).__name__}); diagnosis uses the failure only",
+                severity="warning",
+            )
+        diagnosis = diagnose(failure, files, search_results=format_sources(sources))
+        if sources:
+            emit(
+                run_id,
+                "DIAGNOSING",
+                f"Consulted {len(sources)} untrusted web source(s)",
+                {"tavily_urls": [item.get("url", "") for item in sources]},
+            )
         emit(run_id, "DIAGNOSING", diagnosis or "No diagnosis; patching from the failure output")
 
         patch, outcome = repair_until_verified(
@@ -145,6 +180,10 @@ def run_incident(incident: IncidentEvidence) -> RunResult:
             result.discoveries = challenge(result, handle)
         manifest = build_manifest(result, baseline["test_hashes"], commands)
         manifest["model_id"] = config.NEBIUS_MODEL_REASONING
+        if sources:
+            manifest["tavily_sources"] = [
+                {"title": item.get("title", ""), "url": item.get("url", "")} for item in sources
+            ]
         if config.RUN_DISCOVERY:
             manifest["discovery"] = {
                 "experimental": True,
@@ -293,15 +332,43 @@ def _discovery_section(discoveries: list[DiscoveryResult]) -> list[str]:
     ]
 
 
+def _tavily_section(manifest: dict) -> str:
+    sources = manifest.get("tavily_sources") or []
+    lines = [
+        f"- {item.get('title') or 'Source'}: {item['url']}" for item in sources if item.get("url")
+    ]
+    return "\n".join(lines) or "None. Diagnosis used the observed failure and source files only."
+
+
+def _reproducer_section(result: RunResult, manifest: dict) -> str:
+    commands = manifest.get("commands") or []
+    reproducer = next(
+        (item for item in commands if item.get("step") == "baseline_reproducer"), None
+    )
+    if reproducer and reproducer.get("argv"):
+        command = " ".join(str(part) for part in reproducer["argv"])
+        return f"Command: `{command}` (exit {reproducer.get('exit_code')})."
+    return "See the evidence manifest for the reproducer command and exit code."
+
+
 def _pr_body(result: RunResult, manifest: dict) -> str:
     patch = result.patch
     details = [
+        "## Reproduced failing test",
+        _reproducer_section(result, manifest),
+        f"Reported error type: `{result.incident.error_type}`.",
         "## Root-cause hypothesis",
         patch.rationale or "No diagnosis was produced.",
         "## Changed paths",
         "\n".join(f"- `{path}`" for path in patch.touched_paths),
         f"Verified on attempt {patch.attempt} of {config.MAX_PATCH_ATTEMPTS}.",
         *_discovery_section(result.discoveries),
+        "## Residual risks",
+        "- Passing tests are bounded evidence, not mathematical proof.",
+        "- Discovery is experimental; a confirmed second defect is reported here, not repaired.",
+        "- Seeded demo defects only. ResolveLoop never merges or deploys.",
+        "## Tavily sources actually consulted",
+        _tavily_section(manifest),
         "## Evidence manifest",
         f"<details><summary>{result.run_id}</summary>\n\n```json\n"
         f"{json.dumps(manifest, indent=2, sort_keys=True)}\n```\n</details>",

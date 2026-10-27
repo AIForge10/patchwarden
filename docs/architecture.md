@@ -14,7 +14,8 @@ RECEIVED ─► BASELINING      fresh sandbox, detached checkout of the pinned S
              │               run the reproducer + original suite
              ├─► UNREPRODUCED   reproducer not red for the reported error type: stop, no model call
              ▼
-           DIAGNOSING        model sees the OBSERVED red output + the source files it names
+           DIAGNOSING        model sees the OBSERVED red output, the source files it names,
+             │               and optional untrusted Tavily hints (fail-open if search fails)
              ▼
            PATCHING ⇄ VERIFYING   up to MAX_PATCH_ATTEMPTS, each from a clean pinned checkout;
              │                     verifier output is the next attempt's feedback
@@ -60,8 +61,9 @@ as confirmed only when it reproduces twice from a reset state.
 
 Discovery can never fail or downgrade a verified repair. Model or runner problems end as
 `DISCOVERY_UNCONFIRMED` / `ORACLE_UNAVAILABLE` events and the run returns to VERIFIED.
-The second repair loop (plan P2) is not built. A confirmed defect is reported in the
-PR's "Additional scenarios" table as **unresolved**, and the PR carries only the verified
+`verifier.verify_discovery_fix` can judge a secondary patch (confirmed oracle plus original
+gates), but the second repair loop (plan P2) is not wired: a confirmed defect is reported in
+the PR's "Additional scenarios" table as **unresolved**, and the PR carries only the verified
 incident fix (plan section 9, branch rule).
 
 ## Publishing (A7)
@@ -124,6 +126,6 @@ records `GITHUB_ERROR`.
 |---|---|
 | Nebius base URL and model IDs | Verified Oct 21 with `healthcheck_model()` (see `docs/feedback.md`) |
 | E2B | Not used yet: `sandbox/e2b_runner.py` is a local disposable-directory adapter with the same interface |
-| GitHub fine-grained token | Needs Contents + Pull requests read/write on the demo repo only; not yet exercised against the real API |
+| GitHub fine-grained token | Needs Contents + Pull requests read/write on the demo repo only; publisher is covered by mocked tests; live PR is the final judged run |
 | Hosted endpoint | Docker image + `GET /health`; deploy by injecting `.env` values. Real GitHub PR left for the final run |
-| Tavily | Not wired into diagnosis yet |
+| Tavily | Wired into diagnosis as untrusted hints; HTTPS results only; search failures skip to the observed failure and source files. Citations land in the evidence manifest and PR body |

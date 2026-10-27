@@ -67,4 +67,34 @@ def verify_patch(handle, baseline: dict, patch) -> VerificationResult:
 
 
 def verify_discovery_fix(handle, baseline: dict, scenario) -> VerificationResult:
-    raise NotImplementedError("A6: needs the trusted scenario runner to re-run the oracle")
+    """Judge a secondary repair against the confirmed oracle plus the original gates.
+
+    The sandbox is assumed to already hold the candidate files. Discovery still cannot
+    author assertions: the trusted runner and invariant decide whether the defect holds.
+    The second repair loop (plan P2) is not wired into the orchestrator; this function
+    exists so a secondary patch can be judged the same way as the incident fix.
+    """
+    from resolveloop.discovery.catalog import load_invariants
+    from resolveloop.discovery.runner import evaluate_invariant, execute_scenario
+
+    red = baseline["reproducer_failed"]
+    try:
+        catalog = load_invariants(handle.root / "repo" / "demo_app/contracts/invariants.json")
+        observed = execute_scenario(handle, scenario)
+        oracle_holds = not evaluate_invariant(scenario, observed, catalog)
+    except Exception:
+        return VerificationResult(baseline_red=red, status="ORACLE_UNAVAILABLE")
+
+    reproducer = run_reproducer(handle, baseline["reproducer_id"])
+    suite = run_regression_suite(handle)
+    actual_hashes = {path: _sha256(handle, path) for path in baseline["test_hashes"]}
+    intact = actual_hashes == baseline["test_hashes"]
+    passed = red and oracle_holds and reproducer.exit_code == 0 and suite.exit_code == 0 and intact
+    return VerificationResult(
+        baseline_red=red,
+        reproducer_green=reproducer.exit_code == 0,
+        suite_green=suite.exit_code == 0,
+        paths_safe=True,
+        oracle_intact=intact,
+        status="VERIFIED" if passed else "VERIFY_FAILED",
+    )

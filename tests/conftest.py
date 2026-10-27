@@ -1,12 +1,20 @@
 """Shared test doubles."""
 
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from github import GithubException, UnknownObjectException
 
+from resolveloop import config
 from resolveloop.github import client as github_client
 from resolveloop.ratelimit import limiter
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class FakeGitHubRepo:
@@ -80,6 +88,37 @@ def reset_rate_limiter() -> None:
     limiter.reset()
     yield
     limiter.reset()
+
+
+@pytest.fixture(autouse=True)
+def disable_tavily(monkeypatch) -> None:
+    """Tests never hit Tavily unless they opt in with a fake search_error."""
+    monkeypatch.setattr(config, "TAVILY_API_KEY", "")
+
+
+@pytest.fixture
+def target(tmp_path, monkeypatch):
+    """A pinned git repo holding demo_app, allowlisted, with an isolated DB."""
+    repo = tmp_path / "checkout-demo"
+    shutil.copytree(
+        ROOT / "demo_app",
+        repo / "demo_app",
+        ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"),
+    )
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run([*git, "-C", str(repo), "add", "."], check=True)
+    subprocess.run([*git, "-C", str(repo), "commit", "-qm", "seed"], check=True)
+    sha = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True)
+
+    monkeypatch.setenv("PATH", os.path.dirname(sys.executable) + os.pathsep + os.environ["PATH"])
+    monkeypatch.setattr(config, "ALLOWED_REPO_URL", str(repo))
+    monkeypatch.setattr(config, "DATABASE_URL", f"sqlite:///{tmp_path / 'runs.db'}")
+    monkeypatch.setattr(config, "MAX_PATCH_ATTEMPTS", 3)
+    monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", False)
+    monkeypatch.setattr(config, "RUN_DISCOVERY", False)
+    monkeypatch.chdir(tmp_path)
+    return {"repo_url": str(repo), "sha": sha.strip()}
 
 
 @pytest.fixture

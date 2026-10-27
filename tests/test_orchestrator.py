@@ -1,22 +1,18 @@
 """End-to-end gate tests: real git checkout, real pytest in the sandbox, fake model only."""
 
 import json
-import os
-import shutil
 import subprocess
-import sys
 from pathlib import Path
-
-import pytest
 
 from resolveloop import config
 from resolveloop.agent import patcher
 from resolveloop.agent.nebius_client import Reply
 from resolveloop.agent.prompts import DIAGNOSIS_SYSTEM
 from resolveloop.discovery import scenarios
-from resolveloop.models import IncidentEvidence, RunStatus
+from resolveloop.models import CommandResult, IncidentEvidence, RunStatus
 from resolveloop.orchestrator import run_incident
 from resolveloop.store import list_events
+from resolveloop.verifier import baseline as baseline_mod
 
 ROOT = Path(__file__).resolve().parents[1]
 MAIN = (ROOT / "demo_app/app/main.py").read_text()
@@ -38,32 +34,6 @@ DIAGNOSIS = (
 
 def _file_reply(path: str, code: str) -> str:
     return f"FILE: {path}\n```python\n{code}```\n"
-
-
-@pytest.fixture
-def target(tmp_path, monkeypatch):
-    """A pinned git repo holding demo_app, allowlisted, with an isolated DB and evidence dir."""
-    repo = tmp_path / "checkout-demo"
-    shutil.copytree(
-        ROOT / "demo_app",
-        repo / "demo_app",
-        ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"),
-    )
-    git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
-    subprocess.run(["git", "init", "-q", str(repo)], check=True)
-    subprocess.run([*git, "-C", str(repo), "add", "."], check=True)
-    subprocess.run([*git, "-C", str(repo), "commit", "-qm", "seed"], check=True)
-    sha = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True)
-
-    # Sandbox commands run `python`; make that this interpreter, with pytest and pydantic.
-    monkeypatch.setenv("PATH", os.path.dirname(sys.executable) + os.pathsep + os.environ["PATH"])
-    monkeypatch.setattr(config, "ALLOWED_REPO_URL", str(repo))
-    monkeypatch.setattr(config, "DATABASE_URL", f"sqlite:///{tmp_path / 'runs.db'}")
-    monkeypatch.setattr(config, "MAX_PATCH_ATTEMPTS", 3)
-    monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", False)  # PR tests turn it back on
-    monkeypatch.setattr(config, "RUN_DISCOVERY", False)  # so do the discovery tests
-    monkeypatch.chdir(tmp_path)  # evidence/ is written relative to the working directory
-    return {"repo_url": str(repo), "sha": sha.strip()}
 
 
 def _commit_variant(target, path: str, old: str, new: str) -> str:
@@ -210,6 +180,9 @@ def test_verified_run_opens_pr_with_exactly_the_verified_code(
     assert pull.title == "[ResolveLoop] Verified repair for incident demo-001"
     assert "HYPOTHESIS: malformed gateway response" in pull.body
     assert '"patch_sha256"' in pull.body  # evidence manifest embedded for reviewers
+    assert "## Residual risks" in pull.body
+    assert "## Tavily sources actually consulted" in pull.body
+    assert "Diagnosis used the observed failure and source files only" in pull.body
     events = list_events(result.run_id)
     assert events[-1].stage == "PR_OPENED" and events[-1].metadata["pr_url"] == result.pr_url
 
@@ -278,3 +251,59 @@ def test_unusable_scenario_reply_keeps_the_verified_repair(target, monkeypatch) 
 
     assert result.status == RunStatus.VERIFIED and result.discoveries == []
     assert _failure_codes(result.run_id) == ["DISCOVERY_UNCONFIRMED"]
+
+
+def test_unknown_reproducer_is_unreproduced_not_verified(target, monkeypatch) -> None:
+    prompts = _fake_model(monkeypatch, [])
+    result = run_incident(_incident(target, reproducer_id="not_a_known_test"))
+
+    assert result.status == RunStatus.UNREPRODUCED and prompts == []
+    assert result.pr_url is None
+
+
+def test_sandbox_timeout_fails_closed_and_destroys_the_sandbox(target, monkeypatch) -> None:
+    prompts = _fake_model(monkeypatch, [])
+    timed_out = CommandResult(argv=["pytest"], exit_code=124, stdout="timeout", duration_ms=1)
+
+    def boom(handle, reproducer_id):
+        return timed_out
+
+    monkeypatch.setattr(baseline_mod, "run_reproducer", boom)
+    monkeypatch.setattr(
+        baseline_mod,
+        "run_regression_suite",
+        lambda handle: CommandResult(argv=["pytest"], exit_code=0, stdout="", duration_ms=1),
+    )
+    result = run_incident(_incident(target))
+
+    assert result.status == RunStatus.FAILED and prompts == []
+    assert _failure_codes(result.run_id) == ["SANDBOX_TIMEOUT"]
+
+
+def test_tavily_sources_reach_diagnosis_and_the_pr(target, monkeypatch, fake_github) -> None:
+    monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", True)
+    fake_github.base_sha = target["sha"]
+    _fake_model(monkeypatch, [_file_reply("demo_app/app/main.py", FIX)])
+    monkeypatch.setattr(
+        "resolveloop.orchestrator.search_error",
+        lambda query: [{"title": "Pydantic validation", "url": "https://docs.pydantic.dev/errors"}],
+    )
+    result = run_incident(_incident(target))
+
+    assert result.status == RunStatus.PR_OPENED
+    body = fake_github.pulls[0].body
+    assert "https://docs.pydantic.dev/errors" in body
+    sources = json.loads(Path(result.evidence_path).read_text())["tavily_sources"]
+    assert sources[0]["url"].startswith("https://")
+
+
+def test_tavily_failure_does_not_block_a_verified_repair(target, monkeypatch) -> None:
+    def boom(query):
+        raise RuntimeError("tavily down")
+
+    monkeypatch.setattr("resolveloop.orchestrator.search_error", boom)
+    _fake_model(monkeypatch, [_file_reply("demo_app/app/main.py", FIX)])
+    result = run_incident(_incident(target))
+
+    assert result.status == RunStatus.VERIFIED
+    assert any("Web search skipped" in event.message for event in list_events(result.run_id))

@@ -125,6 +125,45 @@ def test_healthcheck_reports_missing_model(monkeypatch):
     assert out["models"]["reasoning"]["available"] is True
 
 
+def test_diagnosis_prompt_marks_search_results_untrusted():
+    from resolveloop.agent.prompts import build_diagnosis_prompt
+
+    text = build_diagnosis_prompt("trace", {"a.py": "x = 1"}, "- Hint: https://example.com/x")
+    assert "untrusted" in text.lower()
+    assert "https://example.com/x" in text
+
+
+def test_search_error_is_noop_without_a_key():
+    from resolveloop.agent.research import search_error
+
+    assert search_error("KeyError") == []
+
+
+def test_search_error_keeps_https_results_only(monkeypatch):
+    import tavily
+
+    from resolveloop import config as cfg
+    from resolveloop.agent.research import search_error
+
+    monkeypatch.setattr(cfg, "TAVILY_API_KEY", "k")
+
+    class FakeClient:
+        def __init__(self, api_key):
+            pass
+
+        def search(self, query, max_results=3):
+            return {
+                "results": [
+                    {"title": "ok", "url": "https://example.com/a", "content": "x"},
+                    {"title": "bad", "url": "http://insecure.example/a", "content": "y"},
+                ]
+            }
+
+    monkeypatch.setattr(tavily, "TavilyClient", FakeClient)
+    found = search_error("ValidationError")
+    assert [item["url"] for item in found] == ["https://example.com/a"]
+
+
 def test_diagnose_keeps_only_the_three_lines(tmp_path, fake):
     fake.text = (
         "thinking...\nEVIDENCE: buggy_checkout.py:6 - no data key check\n"
