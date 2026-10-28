@@ -9,30 +9,42 @@ import json
 import openai
 
 from resolveloop import config
-from resolveloop.agent.context import paths_from_traceback, read_context
+from resolveloop.agent.context import make_unified_diff, paths_from_traceback, read_context
 from resolveloop.agent.nebius_client import ModelUnavailable
-from resolveloop.agent.patcher import diagnose, repair_until_verified
+from resolveloop.agent.patcher import diagnose, propose_patch, repair_until_verified
 from resolveloop.agent.research import format_sources, search_error
 from resolveloop.discovery.catalog import load_invariants
 from resolveloop.discovery.recheck import confirm_violation
 from resolveloop.discovery.scenarios import propose_scenarios
 from resolveloop.events import emit
 from resolveloop.github import client as github_client
-from resolveloop.models import DiscoveryResult, IncidentEvidence, RunResult, RunStatus
+from resolveloop.models import (
+    DiscoveryResult,
+    IncidentEvidence,
+    PatchCandidate,
+    RunResult,
+    RunStatus,
+)
 from resolveloop.reporting.postmortem import render_pr_body
 from resolveloop.sandbox.e2b_runner import create_sandbox, destroy_sandbox
-from resolveloop.sandbox.repository import checkout_pinned_repo
+from resolveloop.sandbox.repository import (
+    apply_unified_diff,
+    checkout_pinned_repo,
+    reset_to_commit,
+)
 from resolveloop.security import assert_allowed_repo
 from resolveloop.store import create_run, get_run, set_run_status
 from resolveloop.verifier.baseline import capture_baseline, failure_output
 from resolveloop.verifier.evidence import build_manifest, write_evidence_bundle
+from resolveloop.verifier.patch_policy import assert_safe_patch, parse_changed_paths
+from resolveloop.verifier.verify import verify_discovery_fix
 
 # FAILED is reachable from any state, so it is not listed.
 _ALLOWED = {
     RunStatus.RECEIVED: {RunStatus.BASELINING},
     RunStatus.BASELINING: {RunStatus.DIAGNOSING, RunStatus.UNREPRODUCED},
     RunStatus.DIAGNOSING: {RunStatus.PATCHING},
-    RunStatus.PATCHING: {RunStatus.VERIFYING},
+    RunStatus.PATCHING: {RunStatus.VERIFYING, RunStatus.VERIFIED},
     RunStatus.VERIFYING: {RunStatus.PATCHING, RunStatus.VERIFIED},
     RunStatus.VERIFIED: {RunStatus.CHALLENGING, RunStatus.PR_OPENED},
     RunStatus.CHALLENGING: {RunStatus.VERIFIED, RunStatus.CONFIRMED_DISCOVERY},
@@ -177,7 +189,7 @@ def run_incident(incident: IncidentEvidence) -> RunResult:
             for name, command in outcome.commands.items()
         ]
         if config.RUN_DISCOVERY:
-            result.discoveries = challenge(result, handle)
+            result.discoveries = challenge(result, handle, baseline)
         manifest = build_manifest(result, baseline["test_hashes"], commands)
         manifest["model_id"] = config.NEBIUS_MODEL_REASONING
         if sources:
@@ -193,7 +205,8 @@ def run_incident(incident: IncidentEvidence) -> RunResult:
         result.evidence_path = write_evidence_bundle(run_id, manifest)
         emit(run_id, "VERIFIED", "Evidence written", {"evidence_path": result.evidence_path})
         # Read the verified files now: the sandbox (still patched) is destroyed below.
-        files = {path: (repo / path).read_text() for path in patch.touched_paths}
+        active_patch = result.patch or patch
+        files = {path: (repo / path).read_text() for path in active_patch.touched_paths}
         return maybe_create_pr(result, files, manifest)
     except (ModelUnavailable, openai.OpenAIError) as error:
         return _fail(run_id, incident, "MODEL_UNAVAILABLE", f"{type(error).__name__}: {error}")
@@ -214,7 +227,137 @@ def _verdict(discovery: DiscoveryResult) -> str:
     return "violated once, not reproduced" if discovery.violated else "holds"
 
 
-def challenge(result: RunResult, handle) -> list[DiscoveryResult]:
+def _attempt_secondary_repair(
+    result: RunResult,
+    handle,
+    baseline: dict,
+    confirmed: list[DiscoveryResult],
+) -> None:
+    """P2: Optional secondary repair loop for confirmed discovery defects.
+
+    Branch rule: only included in the final PR if the secondary test is red before
+    the secondary patch and green afterward, while the original reproducer and full
+    suite remain green. Otherwise keep the primary verified patch and report as unresolved.
+    """
+    run_id = result.run_id
+    repo = handle.root / "repo"
+    sha = baseline["baseline_sha"]
+    primary_patch = result.patch
+    if not primary_patch:
+        advance(run_id, RunStatus.VERIFIED, "No primary patch; secondary repair skipped")
+        return
+
+    target_discovery = confirmed[0]
+    spec = target_discovery.scenario
+    obs = json.dumps(target_discovery.observed)
+    app_files = sorted(
+        p.relative_to(repo).as_posix()
+        for p in repo.glob("demo_app/app/**/*.py")
+        if not p.name.startswith("__")
+    )
+    hints = "\n".join(f"{p}:1: candidate source file" for p in app_files)
+    failure = (
+        f"{hints}\n"
+        f"Scenario '{spec.scenario_id}' with parameters {json.dumps(spec.params)} "
+        f"violated invariant '{spec.invariant_id}'. Observed: {obs}."
+    )
+
+    advance(
+        run_id,
+        RunStatus.PATCHING,
+        f"Secondary repair: requesting patch for {spec.scenario_id}",
+    )
+
+    feedback = ""
+    repaired = False
+    for attempt in range(1, config.MAX_PATCH_ATTEMPTS + 1):
+        info = {"attempt": attempt, "scenario_id": spec.scenario_id}
+        emit(
+            run_id,
+            "PATCHING",
+            f"Secondary repair attempt {attempt} of {config.MAX_PATCH_ATTEMPTS}",
+            info,
+        )
+
+        # Sandbox has the primary patch applied
+        reset_to_commit(handle, sha)
+        apply_unified_diff(handle, primary_patch.unified_diff)
+
+        proposal = propose_patch(
+            failure,
+            repo,
+            feedback=feedback,
+            attempt=attempt,
+            diagnosis=f"Fix invariant violation: {spec.invariant_id}",
+            base_sha=sha,
+        )
+        if not proposal.unified_diff:
+            feedback = f"Previous reply was not usable: {proposal.problem}"
+            continue
+
+        try:
+            assert_safe_patch(proposal.unified_diff, baseline["test_hashes"])
+            apply_unified_diff(handle, proposal.unified_diff)
+        except (ValueError, RuntimeError) as error:
+            feedback = f"Patch rejected by policy: {error}"
+            continue
+
+        advance(
+            run_id, RunStatus.VERIFYING, f"Verifying secondary patch for {spec.scenario_id}", info
+        )
+        vr = verify_discovery_fix(handle, baseline, spec)
+        if vr.status == "VERIFIED":
+            touched = sorted(
+                set(primary_patch.touched_paths + parse_changed_paths(proposal.unified_diff))
+            )
+            # Recompute total combined diff from base_sha to current patched repo
+            reset_to_commit(handle, sha)
+            clean_files = {p: (repo / p).read_text() for p in touched}
+            apply_unified_diff(handle, primary_patch.unified_diff)
+            apply_unified_diff(handle, proposal.unified_diff)
+            new_files = {p: (repo / p).read_text() for p in touched}
+
+            combined_diff = "".join(
+                make_unified_diff(p, clean_files[p], new_files[p])
+                for p in touched
+                if clean_files[p] != new_files[p]
+            )
+
+            result.patch = PatchCandidate(
+                base_sha=sha,
+                unified_diff=combined_diff,
+                rationale=f"{primary_patch.rationale}\nSecondary repair: fixed {spec.invariant_id}",
+                attempt=primary_patch.attempt,
+                touched_paths=touched,
+            )
+            result.verification = vr
+            target_discovery.repaired = True
+            repaired = True
+            advance(run_id, RunStatus.VERIFIED, f"Secondary repair verified for {spec.scenario_id}")
+            break
+        else:
+            feedback = f"Secondary fix failed verification: {vr.status}"
+            advance(
+                run_id,
+                RunStatus.PATCHING,
+                f"Secondary fix attempt {attempt} failed verification",
+                info,
+            )
+
+    if not repaired:
+        # Fall back to primary verified patch
+        reset_to_commit(handle, sha)
+        apply_unified_diff(handle, primary_patch.unified_diff)
+        advance(
+            run_id,
+            RunStatus.VERIFIED,
+            "Secondary repair did not verify; keeping primary verified fix",
+        )
+
+
+def challenge(
+    result: RunResult, handle, baseline: dict | None = None
+) -> list[DiscoveryResult]:
     """A6 (experimental): challenge the verified patch with trusted catalog scenarios.
 
     The model only picks catalog IDs and bounded parameters; trusted runner code executes
@@ -291,11 +434,14 @@ def challenge(result: RunResult, handle) -> list[DiscoveryResult]:
             {"scenarios": ids},
             "warning",
         )
-        advance(
-            run_id,
-            RunStatus.VERIFIED,
-            "Second defect reported, not repaired: the PR carries only the verified incident fix",
-        )
+        if config.REPAIR_DISCOVERY and baseline is not None:
+            _attempt_secondary_repair(result, handle, baseline, confirmed)
+        else:
+            advance(
+                run_id,
+                RunStatus.VERIFIED,
+                "Second defect reported, not repaired: PR carries only verified incident fix",
+            )
     else:
         if any(d.violated for d in discoveries):
             emit(
@@ -318,7 +464,12 @@ def _discovery_section(discoveries: list[DiscoveryResult]) -> list[str]:
         return []
     rows = ["| Scenario | Params | Invariant | Observed | Result |", "|---|---|---|---|---|"]
     for d in discoveries:
-        outcome = "**confirmed defect, unresolved**" if _confirmed(d) else _verdict(d)
+        if getattr(d, "repaired", False):
+            outcome = "**confirmed defect, repaired in this PR**"
+        elif _confirmed(d):
+            outcome = "**confirmed defect, unresolved**"
+        else:
+            outcome = _verdict(d)
         rows.append(
             f"| `{d.scenario.scenario_id}` | `{json.dumps(d.scenario.params)}` | "
             f"`{d.oracle_id}` | `{json.dumps(d.observed)}` | {outcome} |"
