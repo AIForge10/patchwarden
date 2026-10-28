@@ -69,6 +69,10 @@ that its traceback names no source file.
 - **Tavily hints were generic.** The query is the error type plus the alert message, so for
   `ValidationError: Unexpected payment response` the results were payment-provider error pages
   rather than pydantic docs. The fixes came from the observed failure and the source files.
+  After this evaluation the query was changed to come from the observed failure
+  (`agent/research.build_search_query`): for case 01 it is now
+  `python pydantic ValidationError model_validate Field required`, which returns the Pydantic
+  "Validation Errors" and "Error Handling" docs. The runs above used the old query.
 
 ## Limits
 

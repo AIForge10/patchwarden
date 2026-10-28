@@ -12,7 +12,7 @@ from patchwarden import config
 from patchwarden.agent.context import make_unified_diff, paths_from_traceback, read_context
 from patchwarden.agent.nebius_client import ModelUnavailable
 from patchwarden.agent.patcher import diagnose, propose_patch, repair_until_verified
-from patchwarden.agent.research import format_sources, search_error
+from patchwarden.agent.research import build_search_query, format_sources, search_error
 from patchwarden.discovery.catalog import load_invariants
 from patchwarden.discovery.recheck import confirm_violation, run_negative_control
 from patchwarden.discovery.scenarios import propose_scenarios
@@ -138,8 +138,9 @@ def run_incident(incident: IncidentEvidence, repair_discovery: bool | None = Non
         repo = handle.root / "repo"
         files = read_context(repo, paths_from_traceback(failure, repo))
         sources: list[dict] = []
+        query = build_search_query(incident.error_type, incident.message, failure)
         try:
-            sources = search_error(f"{incident.error_type}: {incident.message}")
+            sources = search_error(query)
         except Exception as error:
             emit(
                 run_id,
@@ -153,7 +154,7 @@ def run_incident(incident: IncidentEvidence, repair_discovery: bool | None = Non
                 run_id,
                 "DIAGNOSING",
                 f"Consulted {len(sources)} untrusted web source(s)",
-                {"tavily_urls": [item.get("url", "") for item in sources]},
+                {"query": query, "tavily_urls": [item.get("url", "") for item in sources]},
             )
         emit(run_id, "DIAGNOSING", diagnosis or "No diagnosis; patching from the failure output")
 
