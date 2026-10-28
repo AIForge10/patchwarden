@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     SANDBOX_TIMEOUT_SECONDS: int = Field(default=180, ge=1)
     RUN_DISCOVERY: bool = True
     OPEN_PR_ON_VERIFIED: bool = True
+    REPAIR_DISCOVERY: bool = False
 
     def __repr__(self) -> str:
         return f"Settings({public_config(self)})"

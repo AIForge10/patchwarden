@@ -87,6 +87,7 @@ class DiscoveryResult(BaseModel):
     violated: bool
     reproduced_twice: bool = False
     baseline_commit: str = ""
+    repaired: bool = False
 
 
 class RunResult(BaseModel):

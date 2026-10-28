@@ -92,7 +92,8 @@ def _fake_model(monkeypatch, patch_replies: list[str], scenario_reply: str = "")
         if system == DIAGNOSIS_SYSTEM:
             return Reply(DIAGNOSIS, "stop", False)
         prompts.append(prompt)
-        return Reply(patch_replies[len(prompts) - 1], "stop", False)
+        idx = min(len(prompts) - 1, len(patch_replies) - 1)
+        return Reply(patch_replies[idx], "stop", False)
 
     monkeypatch.setattr(patcher, "chat_full", chat_full)
     return prompts
@@ -307,3 +308,72 @@ def test_tavily_failure_does_not_block_a_verified_repair(target, monkeypatch) ->
 
     assert result.status == RunStatus.VERIFIED
     assert any("Web search skipped" in event.message for event in list_events(result.run_id))
+
+
+def test_secondary_repair_loop_verifies_and_includes_fix(
+    target, monkeypatch, fake_github
+) -> None:
+    monkeypatch.setattr(config, "RUN_DISCOVERY", True)
+    monkeypatch.setattr(config, "REPAIR_DISCOVERY", True)
+    monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", True)
+    sha = _commit_variant(
+        target,
+        "demo_app/app/payments.py",
+        "    if idempotency_key not in _charges:\n        _charges[idempotency_key] = 1\n",
+        "    _charges[idempotency_key] = _charges.get(idempotency_key, 0) + 1\n",
+    )
+    fake_github.base_sha = sha
+    payments_fixed = (
+        (Path(target["repo_url"]) / "demo_app/app/payments.py")
+        .read_text()
+        .replace(
+            "    _charges[idempotency_key] = _charges.get(idempotency_key, 0) + 1\n",
+            "    if idempotency_key not in _charges:\n        _charges[idempotency_key] = 1\n",
+        )
+    )
+    _fake_model(
+        monkeypatch,
+        [
+            _file_reply("demo_app/app/main.py", FIX),
+            _file_reply("demo_app/app/payments.py", payments_fixed),
+        ],
+        json.dumps(SCENARIOS),
+    )
+    result = run_incident(_incident(target, commit_sha=sha))
+
+    assert result.status == RunStatus.PR_OPENED
+    (retry,) = [d for d in result.discoveries if d.violated]
+    assert retry.repaired is True
+    assert "**confirmed defect, repaired in this PR**" in fake_github.pulls[0].body
+    (commit,) = fake_github.commits.values()
+    assert "demo_app/app/payments.py" in commit["files"]
+    assert "demo_app/app/main.py" in commit["files"]
+
+
+def test_secondary_repair_fallback_on_failure(target, monkeypatch, fake_github) -> None:
+    monkeypatch.setattr(config, "RUN_DISCOVERY", True)
+    monkeypatch.setattr(config, "REPAIR_DISCOVERY", True)
+    monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", True)
+    sha = _commit_variant(
+        target,
+        "demo_app/app/payments.py",
+        "    if idempotency_key not in _charges:\n        _charges[idempotency_key] = 1\n",
+        "    _charges[idempotency_key] = _charges.get(idempotency_key, 0) + 1\n",
+    )
+    fake_github.base_sha = sha
+    _fake_model(
+        monkeypatch,
+        [
+            _file_reply("demo_app/app/main.py", FIX),
+            "I cannot fix this secondary issue.",
+        ],
+        json.dumps(SCENARIOS),
+    )
+    result = run_incident(_incident(target, commit_sha=sha))
+
+    assert result.status == RunStatus.PR_OPENED
+    (retry,) = [d for d in result.discoveries if d.violated]
+    assert retry.repaired is False
+    assert "**confirmed defect, unresolved**" in fake_github.pulls[0].body
+    (commit,) = fake_github.commits.values()
+    assert list(commit["files"]) == ["demo_app/app/main.py"]
