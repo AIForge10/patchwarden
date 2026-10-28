@@ -1,0 +1,12 @@
+{
+  "incident_id": "demo-004",
+  "repo_url": "https://github.com/Satyabratadas/resolveloop-demo",
+  "commit_sha": "24f3050fc3e628854b4beeb31e9da23e825b0699",
+  "error_type": "KeyError",
+  "message": "Missing inventory item in checkout",
+  "traceback": "Traceback (most recent call last):\n  File 'demo_app/app/main.py', line 12, in checkout\nKeyError: 'item_id'",
+  "reproducer_id": "checkout_malformed_response",
+  "sanitized_request": {"order_id": "order-126", "amount": 35},
+  "environment": {"provider_mode": "normal"},
+  "timestamp": "2026-10-28T09:15:00Z"
+}

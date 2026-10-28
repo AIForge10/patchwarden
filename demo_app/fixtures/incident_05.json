@@ -1,0 +1,12 @@
+{
+  "incident_id": "demo-005",
+  "repo_url": "https://github.com/Satyabratadas/resolveloop-demo",
+  "commit_sha": "24f3050fc3e628854b4beeb31e9da23e825b0699",
+  "error_type": "TimeoutError",
+  "message": "Gateway timed out during charge",
+  "traceback": "Traceback (most recent call last):\n  File 'demo_app/app/payments.py', line 10, in charge\nTimeoutError: gateway timed out",
+  "reproducer_id": "checkout_malformed_response",
+  "sanitized_request": {"order_id": "order-127", "amount": 60, "provider_mode": "timeout"},
+  "environment": {"provider_mode": "timeout"},
+  "timestamp": "2026-10-28T09:20:00Z"
+}

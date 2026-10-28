@@ -1,12 +1,12 @@
 {
   "incident_id": "demo-001",
-  "repo_url": "https://github.com/ORG/checkout-demo",
-  "commit_sha": "<EXACT_40_HEX_COMMIT_SHA>",
+  "repo_url": "https://github.com/Satyabratadas/resolveloop-demo",
+  "commit_sha": "24f3050fc3e628854b4beeb31e9da23e825b0699",
   "error_type": "ValidationError",
   "message": "Unexpected payment response",
-  "traceback": "Traceback (most recent call last): ...",
+  "traceback": "Traceback (most recent call last):\n  File 'demo_app/app/main.py', line 14, in checkout\n    result = PaymentResult.model_validate(response)\npydantic_core._pydantic_core.ValidationError: 1 validation error for PaymentResult\nstatus\n  Field required",
   "reproducer_id": "checkout_malformed_response",
   "sanitized_request": {"order_id": "order-123", "amount": 50},
   "environment": {"provider_mode": "malformed"},
-  "timestamp": "2026-10-10T12:00:00Z"
+  "timestamp": "2026-10-28T09:00:00Z"
 }
