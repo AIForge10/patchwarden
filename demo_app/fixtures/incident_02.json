@@ -1,0 +1,12 @@
+{
+  "incident_id": "demo-002",
+  "repo_url": "https://github.com/Satyabratadas/resolveloop-demo",
+  "commit_sha": "24f3050fc3e628854b4beeb31e9da23e825b0699",
+  "error_type": "AssertionError",
+  "message": "Duplicate charge on retried idempotency key",
+  "traceback": "Traceback (most recent call last):\n  File 'demo_app/app/payments.py', line 16, in charge\nAssertionError: duplicate charge registered",
+  "reproducer_id": "checkout_malformed_response",
+  "sanitized_request": {"order_id": "order-124", "amount": 75, "idempotency_key": "idem-repeat"},
+  "environment": {"provider_mode": "normal"},
+  "timestamp": "2026-10-28T09:05:00Z"
+}

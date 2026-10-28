@@ -1,1 +1,29 @@
-{}
+{
+  "version": "1.0",
+  "scenarios": [
+    {
+      "scenario_id": "normal_success",
+      "invariant_id": "success_exactly_one_order",
+      "params": {"amount": 100},
+      "description": "Standard payment success produces exactly one completed order"
+    },
+    {
+      "scenario_id": "gateway_decline",
+      "invariant_id": "failed_payment_not_completed",
+      "params": {"decline_code": "declined"},
+      "description": "Declined card payment results in failed order and no completion"
+    },
+    {
+      "scenario_id": "retry_same_key",
+      "invariant_id": "at_most_one_charge",
+      "params": {"attempts": 2},
+      "description": "Retried payment with identical idempotency key yields at most one charge"
+    },
+    {
+      "scenario_id": "malformed_gateway_response",
+      "invariant_id": "failed_payment_not_completed",
+      "params": {"payload_variant": "missing_status"},
+      "description": "Malformed payload from payment gateway marks order as failed"
+    }
+  ]
+}

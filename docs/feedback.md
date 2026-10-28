@@ -46,3 +46,4 @@ Running notes from building ResolveLoop. Facts only: what we ran and what happen
 | Date | Area | Finding | Outcome |
 | --- | --- | --- | --- |
 | 2026-10-25 | Baseline demo | The malformed gateway case is intentionally red before repair. | Preserve as an explicit reproducer. |
+| 2026-10-28 | Live Pipeline | Live run with `nvidia/nemotron-3-super-120b-a12b` resolved `ValidationError` on attempt 1/3 in 24s. All 3 scenario invariant checks held; PR opened cleanly. | Verified end-to-end evidence gating in production. |
