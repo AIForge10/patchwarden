@@ -29,11 +29,13 @@ package itself in editable mode (`pip install -e . --no-deps`), so `import patch
     cp .env.example .env
 
 Open `.env` and fill in your own keys. Never commit this file and never paste keys in chat, issues or pull requests.
-You don't need every key on day one: Atina's first pieces (demo app, webhook) only need `WEBHOOK_SECRET`.
+`WEBHOOK_SECRET` and `ALLOWED_REPO_URL` are enough to start the API and replay recordings. A live repair also needs
+`NEBIUS_API_KEY` (model), `E2B_API_KEY` (sandbox; without it code runs in a local temp directory), optionally
+`TAVILY_API_KEY` (web hints), and `GITHUB_TOKEN` to open the pull request.
 
 ## 5. Check that it works
 
-    make test      # should show: 1 passed
+    make test      # agent suite: all tests pass, no network (E2B, Nebius, Tavily, GitHub are faked)
     make lint      # should show: All checks passed!
     make secrets   # no output = no leaked secrets
 
@@ -47,13 +49,13 @@ Always run commands from inside the `patchwarden` folder.
 | `make test`      | Agent test suite (`tests/`)                                       |
 | `make test-demo` | Demo checkout app suite (`demo_app/tests/`)                       |
 | `make lint`      | Ruff                                                              |
-| `make run`       | Start the API on port 8000 (once `patchwarden/api/main.py` exists)  |
-| `make probe`     | Nebius model probe (once `patchwarden/scripts/model_probe.py` exists) |
+| `make run`       | Start the API on port 8000                                        |
+| `make probe`     | Nebius model probe                                                |
 | `make lock`      | Re-pin after changing dependencies in `pyproject.toml`            |
 
 ## Who owns which folder
 
-A = Satyabrata (agent / sandbox / verifier), B = Atina (application / integration). Files are empty placeholders until their owner fills them.
+A = Satyabrata (agent / verifier / orchestrator), B = Atina (demo app / trusted evidence). This is the original day-one split.
 
 | Path | Owner | Plan piece |
 |------|-------|------------|

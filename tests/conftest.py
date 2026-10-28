@@ -91,6 +91,12 @@ def reset_rate_limiter() -> None:
 
 
 @pytest.fixture(autouse=True)
+def local_sandbox(monkeypatch) -> None:
+    """Tests never create E2B sandboxes; the local backend runs the same fixed argv."""
+    monkeypatch.setattr(config, "SANDBOX_BACKEND", "local")
+
+
+@pytest.fixture(autouse=True)
 def disable_tavily(monkeypatch) -> None:
     """Tests never hit Tavily unless they opt in with a fake search_error."""
     monkeypatch.setattr(config, "TAVILY_API_KEY", "")

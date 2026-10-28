@@ -41,9 +41,31 @@ Running notes from building PatchWarden. Facts only: what we ran and what happen
 - `healthcheck_model()` confirmed both configured models are available to our key.
 - Diagnosis prompt returned the required format: `EVIDENCE: buggy_checkout.py:6 ...`, a correct hypothesis, and `UNCERTAINTY: medium`.
 - Patch call cost 733 input and 572 output tokens on Super. A repeated identical call was served from our local replay cache with no API request.
-# Feedback log
 
-| Date | Area | Finding | Outcome |
-| --- | --- | --- | --- |
-| 2026-10-25 | Baseline demo | The malformed gateway case is intentionally red before repair. | Preserve as an explicit reproducer. |
-| 2026-10-28 | Live Pipeline | Live run with `nvidia/nemotron-3-super-120b-a12b` resolved `ValidationError` on attempt 1/3 in 24s. All 3 scenario invariant checks held; PR opened cleanly. | Verified end-to-end evidence gating in production. |
+## Oct 28: live runs on Nemotron 3 Super, E2B and Tavily
+
+- First live end-to-end run (`run-59eab39b679d`): `ValidationError` fixed on attempt 1 of 3 in
+  24 s, human-review PR opened on the demo repo. Per-case results for the six-case evaluation are
+  in `docs/evaluation.md`, built from the evidence files rather than typed in.
+- Nemotron 3 Super, given the observed red test output plus the source files that output names,
+  returned a minimal whole-file fix with `finish_reason: stop`; no visible reasoning text.
+- Scenario selection: given only the verified diff and the catalog IDs, Super picked
+  `retry_same_key` among its scenarios, which is the one that exposes the hidden double charge.
+  It was never told that defect exists.
+- `nvidia/Nemotron-3-Ultra-550b-a55b` is now listed by `models.list()` for our key (it was not
+  selectable in the console earlier). We kept Super for every recorded run so results stay
+  comparable.
+- Tavily: `search` returned three HTTPS results with titles and URLs for a pydantic
+  `ValidationError` query. The results are passed to the model as untrusted hints and cited in
+  the PR.
+- E2B (not Nebius, but part of the stack): a sandbox starts in about 0.5 s; installing four pinned
+  packages takes about 5 s. `network={"allow_out": [PyPI hosts], "deny_out": ["0.0.0.0/0"]}`
+  blocked GitHub, Nebius and the open internet from inside the sandbox, which let us run
+  model-written code with no route to any key.
+
+### Suggestions for Token Factory
+
+- An explicit way to switch visible reasoning off (or return it in a separate field) on Ultra would
+  save output tokens for agent loops that only need the final answer.
+- Showing the exact model ID string (with its casing) next to each model in the console would help:
+  IDs mix styles (`Nemotron-3-Ultra-550b-a55b` vs `nemotron-3-super-120b-a12b`) and are case-sensitive.

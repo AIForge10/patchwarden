@@ -1,12 +1,18 @@
 {
   "incident_id": "demo-006",
   "repo_url": "https://github.com/Satyabratadas/patchwarden-demo",
-  "commit_sha": "24f3050fc3e628854b4beeb31e9da23e825b0699",
+  "commit_sha": "d58b4dfdaa4d171a93affcd68c3e830379632fa5",
   "error_type": "ValidationError",
-  "message": "Known-good variant verification",
-  "traceback": "No failure: control variant handles payment correctly",
+  "message": "Unexpected payment response",
+  "traceback": "Traceback (most recent call last):\n  File \"demo_app/app/main.py\", line 14, in checkout\n    result = PaymentResult.model_validate(response)\npydantic_core._pydantic_core.ValidationError: 1 validation error for PaymentResult\nstatus\n  Field required [type=missing, input_value={'unexpected': 'gateway payload'}, input_type=dict]",
   "reproducer_id": "checkout_malformed_response",
-  "sanitized_request": {"order_id": "order-128", "amount": 100},
-  "environment": {"provider_mode": "control"},
-  "timestamp": "2026-10-28T09:25:00Z"
+  "sanitized_request": {
+    "order_id": "order-606",
+    "amount": 60
+  },
+  "environment": {
+    "provider_mode": "malformed",
+    "variant": "known-good"
+  },
+  "timestamp": "2026-10-28T12:00:00Z"
 }

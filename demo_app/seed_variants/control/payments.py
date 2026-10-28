@@ -14,6 +14,8 @@ def charge(amount: int, idempotency_key: str, mode: str = "normal") -> PaymentRe
         return None
     if mode == "decline":
         return PaymentResult(status="declined")
+    if mode == "review":
+        return PaymentResult(status="review")
     if mode != "normal":
         raise ValueError("unsupported provider mode")
     _charges.setdefault(idempotency_key, 1)

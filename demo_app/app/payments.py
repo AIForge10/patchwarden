@@ -6,14 +6,15 @@ _charges: dict[str, int] = {}
 def charge(amount: int, idempotency_key: str, mode: str) -> PaymentResult | dict[str, str]:
     if mode == "decline":
         return PaymentResult(status="declined")
+    if mode == "review":
+        return PaymentResult(status="review")
     if mode == "timeout":
         raise TimeoutError("gateway timed out")
     if mode == "malformed":
         return {"unexpected": "gateway payload"}
     if mode != "normal":
         raise ValueError("unsupported provider mode")
-    if idempotency_key not in _charges:
-        _charges[idempotency_key] = 1
+    _charges[idempotency_key] = _charges.get(idempotency_key, 0) + 1
     return PaymentResult(status="approved", charge_id=f"ch_{idempotency_key}")
 
 

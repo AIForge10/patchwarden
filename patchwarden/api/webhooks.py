@@ -6,11 +6,12 @@ from patchwarden import ratelimit
 from patchwarden.events import emit
 from patchwarden.models import IncidentEvidence
 from patchwarden.orchestrator import run_incident
+from patchwarden.sandbox.commands import REPRODUCER_TESTS
 from patchwarden.security import assert_allowed_repo, verify_webhook_signature
 from patchwarden.store import create_run, get_run, list_events
 
 router = APIRouter()
-KNOWN_REPRODUCERS = {"checkout_malformed_response"}
+KNOWN_REPRODUCERS = frozenset(REPRODUCER_TESTS)
 
 
 def parse_alert(payload: dict) -> IncidentEvidence:

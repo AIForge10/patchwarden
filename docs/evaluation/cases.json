@@ -1,0 +1,79 @@
+{
+  "seeded_commit": "1e83628cf0f20310c9da2a3454440a27be1a9daa",
+  "known_good_commit": "d58b4dfdaa4d171a93affcd68c3e830379632fa5",
+  "cases": [
+    {
+      "case_id": "case_01_malformed_gateway",
+      "fixture": "demo_app/fixtures/incident_01.json",
+      "run_id": "run-60c9018b79ee",
+      "blind": false,
+      "seeded_hidden_defects": [
+        "retry_same_key"
+      ]
+    },
+    {
+      "case_id": "case_02_duplicate_retry_charge",
+      "fixture": "demo_app/fixtures/incident_02.json",
+      "flags": "--repair-discovery",
+      "run_id": "run-808e3f80bd50",
+      "blind": false,
+      "seeded_hidden_defects": [
+        "retry_same_key"
+      ]
+    },
+    {
+      "case_id": "case_03_unapproved_payment_order",
+      "fixture": "demo_app/fixtures/incident_03.json",
+      "run_id": "run-eb348d42489d",
+      "blind": false,
+      "seeded_hidden_defects": [
+        "retry_same_key"
+      ]
+    },
+    {
+      "case_id": "case_04_inventory_missing",
+      "fixture": "demo_app/fixtures/incident_04.json",
+      "run_id": "run-16a500e5dba8",
+      "blind": true,
+      "seeded_hidden_defects": [
+        "retry_same_key"
+      ]
+    },
+    {
+      "case_id": "case_05_gateway_timeout",
+      "fixture": "demo_app/fixtures/incident_05.json",
+      "run_id": "run-27fb1cfcbd40",
+      "blind": true,
+      "seeded_hidden_defects": [
+        "retry_same_key"
+      ]
+    },
+    {
+      "case_id": "case_06_known_good_control",
+      "fixture": "demo_app/fixtures/incident_06.json",
+      "run_id": "run-8be2b7872f1e",
+      "blind": false,
+      "seeded_hidden_defects": []
+    },
+    {
+      "case_id": "case_01_malformed_gateway_repeat2",
+      "fixture": "demo_app/fixtures/incident_01.json",
+      "flags": "--no-pr",
+      "run_id": "run-e06f338fd0a2",
+      "blind": false,
+      "seeded_hidden_defects": [
+        "retry_same_key"
+      ]
+    },
+    {
+      "case_id": "case_01_malformed_gateway_repeat3",
+      "fixture": "demo_app/fixtures/incident_01.json",
+      "flags": "--no-pr",
+      "run_id": "run-ec9b624590ab",
+      "blind": false,
+      "seeded_hidden_defects": [
+        "retry_same_key"
+      ]
+    }
+  ]
+}

@@ -6,6 +6,7 @@ class CheckoutRequest(BaseModel):
     amount: int = Field(gt=0, le=1000)
     idempotency_key: str
     provider_mode: str = "normal"
+    sku: str = "sku-basic"
 
 
 class Order(BaseModel):

@@ -25,6 +25,9 @@ FIX = MAIN.replace(
 )
 # Reproducer goes green, but every order now fails: the original suite must catch it.
 REGRESSION = MAIN.replace(BUG, '    return create_order(request.order_id, "failed")\n')
+# The seeded double charge (the hidden second defect) and its known-good form.
+HIDDEN = "    _charges[idempotency_key] = _charges.get(idempotency_key, 0) + 1\n"
+CLEAN = "    if idempotency_key not in _charges:\n        _charges[idempotency_key] = 1\n"
 DIAGNOSIS = (
     "EVIDENCE: demo_app/app/main.py:14 - validates an unchecked gateway payload\n"
     "HYPOTHESIS: malformed gateway response raises ValidationError\n"
@@ -46,6 +49,11 @@ def _commit_variant(target, path: str, old: str, new: str) -> str:
     subprocess.run([*git, target["repo_url"], "commit", "-qam", "variant"], check=True)
     sha = subprocess.check_output(["git", "-C", target["repo_url"], "rev-parse", "HEAD"], text=True)
     return sha.strip()
+
+
+def _known_good(target) -> str:
+    """Pin a variant without the hidden double charge; returns its SHA."""
+    return _commit_variant(target, "demo_app/app/payments.py", HIDDEN, CLEAN)
 
 
 def _incident(target, **overrides) -> IncidentEvidence:
@@ -118,7 +126,8 @@ def test_regression_is_rejected_then_real_fix_verified(target, monkeypatch) -> N
     assert "demo_app/app/main.py:14" in prompts[0]  # model saw the observed red reproducer
     assert Path(result.evidence_path).is_file()
     stages = [e.stage for e in list_events(result.run_id)]
-    assert stages[:2] == ["BASELINING", "DIAGNOSING"] and stages[-2:] == ["VERIFIED", "VERIFIED"]
+    assert list(dict.fromkeys(stages))[:2] == ["BASELINING", "DIAGNOSING"]
+    assert stages[-2:] == ["VERIFIED", "VERIFIED"]
 
 
 def test_every_attempt_failing_ends_failed_not_verified(target, monkeypatch) -> None:
@@ -202,9 +211,10 @@ def test_github_error_keeps_verified_and_claims_no_pr(target, monkeypatch, fake_
 
 
 def test_discovery_challenges_the_patch_and_rejects_invented_scenarios(target, monkeypatch) -> None:
+    sha = _known_good(target)
     monkeypatch.setattr(config, "RUN_DISCOVERY", True)
     _fake_model(monkeypatch, [_file_reply("demo_app/app/main.py", FIX)], json.dumps(SCENARIOS))
-    result = run_incident(_incident(target))
+    result = run_incident(_incident(target, commit_sha=sha))
 
     assert result.status == RunStatus.VERIFIED
     assert [d.scenario.scenario_id for d in result.discoveries] == [
@@ -218,16 +228,17 @@ def test_discovery_challenges_the_patch_and_rejects_invented_scenarios(target, m
     messages = [e.message for e in list_events(result.run_id)]
     assert any("Rejected a proposed scenario: drop_database" in m for m in messages)
     manifest = json.loads(Path(result.evidence_path).read_text())
-    assert manifest["discovery"] == {"experimental": True, "scenarios_run": 3, "confirmed": []}
+    assert manifest["discovery"] == {
+        "experimental": True,
+        "scenarios_run": 3,
+        "confirmed": [],
+        "negative_controls": {},
+        "repaired": [],
+    }
 
 
 def test_confirmed_second_defect_is_reported_not_repaired(target, monkeypatch, fake_github) -> None:
-    sha = _commit_variant(
-        target,
-        "demo_app/app/payments.py",
-        "    if idempotency_key not in _charges:\n        _charges[idempotency_key] = 1\n",
-        "    _charges[idempotency_key] = _charges.get(idempotency_key, 0) + 1\n",
-    )
+    sha = target["sha"]  # the seeded baseline carries the hidden double charge
     monkeypatch.setattr(config, "RUN_DISCOVERY", True)
     monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", True)
     fake_github.base_sha = sha
@@ -238,6 +249,7 @@ def test_confirmed_second_defect_is_reported_not_repaired(target, monkeypatch, f
     (retry,) = [d for d in result.discoveries if d.violated]
     assert retry.scenario.scenario_id == "retry_same_key" and retry.reproduced_twice
     assert retry.observed == {"charge_count": 2}  # ran against the checkout, not this repo
+    assert retry.control_clean is True  # the same scenario holds on the known-good gateway
     stages = [e.stage for e in list_events(result.run_id)]
     assert stages.index("CONFIRMED_DISCOVERY") < stages.index("PR_OPENED")
     (commit,) = fake_github.commits.values()
@@ -316,20 +328,12 @@ def test_secondary_repair_loop_verifies_and_includes_fix(
     monkeypatch.setattr(config, "RUN_DISCOVERY", True)
     monkeypatch.setattr(config, "REPAIR_DISCOVERY", True)
     monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", True)
-    sha = _commit_variant(
-        target,
-        "demo_app/app/payments.py",
-        "    if idempotency_key not in _charges:\n        _charges[idempotency_key] = 1\n",
-        "    _charges[idempotency_key] = _charges.get(idempotency_key, 0) + 1\n",
-    )
+    sha = target["sha"]  # the seeded baseline carries the hidden double charge
     fake_github.base_sha = sha
     payments_fixed = (
         (Path(target["repo_url"]) / "demo_app/app/payments.py")
         .read_text()
-        .replace(
-            "    _charges[idempotency_key] = _charges.get(idempotency_key, 0) + 1\n",
-            "    if idempotency_key not in _charges:\n        _charges[idempotency_key] = 1\n",
-        )
+        .replace(HIDDEN, CLEAN)
     )
     _fake_model(
         monkeypatch,
@@ -354,12 +358,7 @@ def test_secondary_repair_fallback_on_failure(target, monkeypatch, fake_github) 
     monkeypatch.setattr(config, "RUN_DISCOVERY", True)
     monkeypatch.setattr(config, "REPAIR_DISCOVERY", True)
     monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", True)
-    sha = _commit_variant(
-        target,
-        "demo_app/app/payments.py",
-        "    if idempotency_key not in _charges:\n        _charges[idempotency_key] = 1\n",
-        "    _charges[idempotency_key] = _charges.get(idempotency_key, 0) + 1\n",
-    )
+    sha = target["sha"]  # the seeded baseline carries the hidden double charge
     fake_github.base_sha = sha
     _fake_model(
         monkeypatch,
@@ -377,3 +376,26 @@ def test_secondary_repair_fallback_on_failure(target, monkeypatch, fake_github) 
     assert "**confirmed defect, unresolved**" in fake_github.pulls[0].body
     (commit,) = fake_github.commits.values()
     assert list(commit["files"]) == ["demo_app/app/main.py"]
+
+
+def test_violation_on_the_known_good_control_is_not_claimed(target, monkeypatch) -> None:
+    """A scenario that also fails on the control gateway means the oracle is not trusted."""
+    sha = _commit_variant(
+        target,
+        "demo_app/seed_variants/control/payments.py",
+        "    _charges.setdefault(idempotency_key, 1)\n",
+        "    _charges[idempotency_key] = _charges.get(idempotency_key, 0) + 1\n",
+    )
+    monkeypatch.setattr(config, "RUN_DISCOVERY", True)
+    _fake_model(monkeypatch, [_file_reply("demo_app/app/main.py", FIX)], json.dumps(SCENARIOS))
+    result = run_incident(_incident(target, commit_sha=sha))
+
+    assert result.status == RunStatus.VERIFIED
+    (retry,) = [d for d in result.discoveries if d.violated]
+    assert retry.reproduced_twice and retry.control_clean is False
+    stages = [e.stage for e in list_events(result.run_id)]
+    assert "CONFIRMED_DISCOVERY" not in stages
+    assert _failure_codes(result.run_id) == ["DISCOVERY_UNCONFIRMED"]
+    manifest = json.loads(Path(result.evidence_path).read_text())
+    assert manifest["discovery"]["confirmed"] == []
+    assert manifest["discovery"]["negative_controls"] == {"retry_same_key": False}

@@ -1,5 +1,5 @@
 # Run inside the conda env:  conda activate patchwarden
-.PHONY: install hooks lock lint format test test-demo run serve probe incident record secrets
+.PHONY: install hooks lock lint format test test-demo run serve probe incident evaluation record secrets
 
 install: hooks      ## install pinned deps + this package (editable)
 	pip install -r requirements-dev.txt
@@ -21,8 +21,9 @@ format:
 test:
 	python -m pytest
 
-test-demo:          ## demo app suite (test_incident is expected RED on the seeded baseline)
-	python -m pytest demo_app/tests
+test-demo:          ## demo app: original suite + control green; the four test_incident*.py are RED by design
+	python -m pytest demo_app/tests/test_baseline.py demo_app/tests/test_control.py
+	-python -m pytest -q demo_app/tests/test_incident*.py
 
 run:
 	uvicorn patchwarden.api.main:app --reload --port 8000
@@ -34,7 +35,10 @@ probe:              ## Nebius model probe (A1)
 	python -m patchwarden.scripts.model_probe
 
 incident:           ## one incident end to end (real model; opens a PR if OPEN_PR_ON_VERIFIED + GitHub set)
-	python -m patchwarden.scripts.run_incident
+	python -m patchwarden.scripts.run_incident --fixture $(or $(FIXTURE),demo_app/fixtures/incident_01.json)
+
+evaluation:         ## rebuild docs/evaluation.csv from the runs listed in docs/evaluation/cases.json
+	python -m patchwarden.scripts.build_evaluation docs/evaluation/cases.json
 
 record:             ## export a run for UI replay: make record RUN=run-...
 	python -m patchwarden.scripts.record_run $(RUN)

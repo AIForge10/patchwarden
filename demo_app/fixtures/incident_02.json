@@ -1,12 +1,17 @@
 {
   "incident_id": "demo-002",
   "repo_url": "https://github.com/Satyabratadas/patchwarden-demo",
-  "commit_sha": "24f3050fc3e628854b4beeb31e9da23e825b0699",
-  "error_type": "AssertionError",
-  "message": "Duplicate charge on retried idempotency key",
-  "traceback": "Traceback (most recent call last):\n  File 'demo_app/app/payments.py', line 16, in charge\nAssertionError: duplicate charge registered",
+  "commit_sha": "1e83628cf0f20310c9da2a3454440a27be1a9daa",
+  "error_type": "ValidationError",
+  "message": "Unexpected payment response",
+  "traceback": "Traceback (most recent call last):\n  File \"demo_app/app/main.py\", line 14, in checkout\n    result = PaymentResult.model_validate(response)\npydantic_core._pydantic_core.ValidationError: 1 validation error for PaymentResult\nstatus\n  Field required [type=missing, input_value={'unexpected': 'gateway payload'}, input_type=dict]",
   "reproducer_id": "checkout_malformed_response",
-  "sanitized_request": {"order_id": "order-124", "amount": 75, "idempotency_key": "idem-repeat"},
-  "environment": {"provider_mode": "normal"},
-  "timestamp": "2026-10-28T09:05:00Z"
+  "sanitized_request": {
+    "order_id": "order-231",
+    "amount": 75
+  },
+  "environment": {
+    "provider_mode": "malformed"
+  },
+  "timestamp": "2026-10-28T12:00:00Z"
 }
