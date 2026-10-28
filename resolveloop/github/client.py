@@ -10,7 +10,12 @@ from resolveloop import config
 def _repo():
     if not (config.GITHUB_TOKEN and config.GITHUB_TARGET_REPO):
         raise RuntimeError("GitHub publishing is not configured")
-    return Github(config.GITHUB_TOKEN).get_repo(config.GITHUB_TARGET_REPO)
+    name = (
+        f"{config.GITHUB_OWNER}/{config.GITHUB_TARGET_REPO}"
+        if config.GITHUB_OWNER and "/" not in config.GITHUB_TARGET_REPO
+        else config.GITHUB_TARGET_REPO
+    )
+    return Github(config.GITHUB_TOKEN).get_repo(name)
 
 
 def create_branch(base_sha: str, run_id: str) -> str:
