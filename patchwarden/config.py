@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     RUN_DISCOVERY: bool = True
     OPEN_PR_ON_VERIFIED: bool = True
     REPAIR_DISCOVERY: bool = False
+    # Public "run live" button on the hosted UI: live runs per UTC day. 0 turns it off.
+    PUBLIC_DEMO_RUNS_PER_DAY: int = Field(default=0, ge=0, le=500)
 
     def __repr__(self) -> str:
         return f"Settings({public_config(self)})"

@@ -31,7 +31,8 @@ package itself in editable mode (`pip install -e . --no-deps`), so `import patch
 Open `.env` and fill in your own keys. Never commit this file and never paste keys in chat, issues or pull requests.
 `WEBHOOK_SECRET` and `ALLOWED_REPO_URL` are enough to start the API and replay recordings. A live repair also needs
 `NEBIUS_API_KEY` (model), `E2B_API_KEY` (sandbox; without it code runs in a local temp directory), optionally
-`TAVILY_API_KEY` (web hints), and `GITHUB_TOKEN` to open the pull request.
+`TAVILY_API_KEY` (web hints), and `GITHUB_TOKEN` to open the pull request. On a public host, keep
+`OPEN_PR_ON_VERIFIED=false`; set `PUBLIC_DEMO_RUNS_PER_DAY` above 0 to show the "Run live" button.
 
 ## 5. Check that it works
 

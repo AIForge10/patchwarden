@@ -38,9 +38,13 @@ def test_health_reports_ok_without_secrets(tmp_path, monkeypatch) -> None:
     body = client.get("/health").json()
     assert body == {
         "ok": True,
+        "model": "nvidia/ok",
         "model_configured": True,
         "github_configured": False,
         "open_pr_on_verified": False,
+        "sandbox": "local",
+        "tavily_configured": False,
+        "live_demo": False,
     }
     assert "dummy-key" not in str(body)
     assert "test-secret" not in str(body)

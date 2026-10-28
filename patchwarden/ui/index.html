@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PatchWarden Runs</title>
+  <title>PatchWarden</title>
+  <meta name="description" content="Evidence-gated incident response: reproduce, patch, verify, then open a human-review PR.">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -20,12 +21,46 @@
   </header>
 
   <main>
-    <section id="home" class="panel" hidden>
-      <h1>Recent runs</h1>
-      <p class="muted">Signed alerts land here. Open one to follow it live.</p>
-      <ul id="recent" class="recent"></ul>
-      <h2>Recordings</h2>
-      <ul id="recordings" class="recent"></ul>
+    <section id="home" hidden>
+      <div class="panel hero">
+        <h1>Evidence-gated incident response</h1>
+        <p>
+          PatchWarden takes a signed crash alert, reproduces it in an isolated E2B sandbox, has
+          NVIDIA Nemotron write a fix, and opens a human-review pull request only after trusted
+          tests prove it. Then it challenges its own patch and looks for a second bug nobody reported.
+        </p>
+        <p class="muted">The model proposes; trusted code decides. Every status on this page comes from a test, a hash or an invariant, never from model output.</p>
+        <ul class="stack" aria-label="Built with">
+          <li>NVIDIA Nemotron 3 Super</li>
+          <li>Nebius Token Factory</li>
+          <li>E2B sandbox</li>
+          <li>Tavily</li>
+          <li>GitHub</li>
+        </ul>
+        <p class="links">
+          <a href="https://github.com/AIForge10/patchwarden" target="_blank" rel="noopener">Source</a>
+          <a href="https://github.com/Satyabratadas/patchwarden-demo" target="_blank" rel="noopener">Target repo (seeded bugs)</a>
+          <a href="https://github.com/Satyabratadas/patchwarden-demo/pulls" target="_blank" rel="noopener">PRs it opened</a>
+          <a href="https://github.com/AIForge10/patchwarden/blob/main/docs/evaluation.md" target="_blank" rel="noopener">Evaluation</a>
+        </p>
+      </div>
+
+      <div class="panel" id="live-panel" hidden>
+        <h2>Run it live</h2>
+        <p class="muted" id="live-note"></p>
+        <ul id="cases" class="cases"></ul>
+      </div>
+
+      <div class="panel">
+        <h2>Recorded runs</h2>
+        <p class="muted">Live runs (Nemotron on Nebius, E2B sandbox, Tavily), replayed from their stored event log and evidence.</p>
+        <ul id="recordings" class="recent"></ul>
+      </div>
+
+      <div class="panel">
+        <h2>Recent runs on this server</h2>
+        <ul id="recent" class="recent"></ul>
+      </div>
     </section>
 
     <section id="run" hidden>
@@ -49,6 +84,12 @@
           <h2>Evidence</h2>
           <div id="evidence"></div>
         </aside>
+      </div>
+
+      <div class="panel" id="patch-panel" hidden>
+        <h2>Verified patch</h2>
+        <p class="muted small" id="patch-note"></p>
+        <pre id="patch" class="diff"></pre>
       </div>
     </section>
 

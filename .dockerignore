@@ -16,5 +16,6 @@ sandbox_output
 docs
 tests
 demo_app
+!demo_app/fixtures
 *.md
 !README.md
