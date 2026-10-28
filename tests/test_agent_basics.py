@@ -206,3 +206,28 @@ def test_assertion_only_failure_follows_the_test_imports(tmp_path):
     )
     trace = "shop/tests/test_total.py:5: in test_total\nE   AssertionError: assert 1 == 2\n"
     assert context.paths_from_traceback(trace, tmp_path) == ["shop/app.py"]
+
+
+PYTEST_VALIDATION_FAILURE = """\
+>       result = PaymentResult.model_validate(response)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for PaymentResult
+E       status
+E         Field required [type=missing, input_value={'unexpected': 'gateway payload'}]
+"""
+
+
+def test_search_query_names_the_library_and_failing_call():
+    from patchwarden.agent.research import build_search_query
+
+    query = build_search_query("ValidationError", "Bad payment", PYTEST_VALIDATION_FAILURE)
+    assert query == "python pydantic ValidationError model_validate Field required"
+
+
+def test_search_query_for_builtin_errors_uses_the_alert_and_is_redacted():
+    from patchwarden.agent.research import build_search_query
+
+    failure = ">       _stock[sku] -= 1\nE       KeyError: 'sku-retired'\n"
+    assert build_search_query("KeyError", "Unknown SKU", failure) == "python KeyError Unknown SKU"
+    leaked = build_search_query("KeyError", "token ghp_abc123 leaked", "")
+    assert "ghp_abc123" not in leaked and leaked.startswith("python KeyError")
