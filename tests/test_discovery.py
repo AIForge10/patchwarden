@@ -1,11 +1,11 @@
 import json
 
 from demo_app.app.store import reset_state
-from resolveloop.agent.nebius_client import Reply
-from resolveloop.discovery import scenarios
-from resolveloop.discovery.catalog import load_invariants, validate_scenario
-from resolveloop.discovery.runner import evaluate_invariant, execute_scenario
-from resolveloop.models import IncidentEvidence, PatchCandidate, ScenarioSpec
+from patchwarden.agent.nebius_client import Reply
+from patchwarden.discovery import scenarios
+from patchwarden.discovery.catalog import load_invariants, validate_scenario
+from patchwarden.discovery.runner import evaluate_invariant, execute_scenario
+from patchwarden.models import IncidentEvidence, PatchCandidate, ScenarioSpec
 
 
 def test_catalog_and_trusted_normal_scenario() -> None:

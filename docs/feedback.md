@@ -1,6 +1,6 @@
 # Feedback log: Nebius Token Factory and NVIDIA Nemotron
 
-Running notes from building ResolveLoop. Facts only: what we ran and what happened.
+Running notes from building PatchWarden. Facts only: what we ran and what happened.
 
 ## Oct 11: first day-one test (Nemotron 3 Ultra)
 
@@ -15,7 +15,7 @@ Running notes from building ResolveLoop. Facts only: what we ran and what happen
 
 - `NEBIUS_MODEL_ID` (from an early plan draft) vs `NEBIUS_MODEL_REASONING` (what `config.py` reads) caused an `AttributeError`. One variable name everywhere avoids this.
 - `models.list()` worked first time and is the easiest way to get exact model IDs. IDs are case-sensitive and mix styles (`Nemotron-3-Ultra-550b-a55b` vs `nemotron-3-super-120b-a12b`).
-- Moving from a flat layout to the `resolveloop/` package meant every import had to change (`from resolveloop import config`). Running tests as `python -m pytest` avoids needing extra path config.
+- Moving from a flat layout to the `patchwarden/` package meant every import had to change (`from patchwarden import config`). Running tests as `python -m pytest` avoids needing extra path config.
 
 ## Oct 21: day-one rerun (Nemotron 3 Super)
 
@@ -31,9 +31,9 @@ Running notes from building ResolveLoop. Facts only: what we ran and what happen
 - Code visible: all 3 fixes wrapped the call in `try/except KeyError` and returned `"status": "failed"`. That is a small, correct change.
 - Trace only: the model fixed the crash line correctly (`.get("data", {})`) but had to guess the rest of the file. It invented a `mark_order_completed()` function that does not exist and changed what `checkout()` returns, which broke the passing test.
 
-### What this means for ResolveLoop
+### What this means for PatchWarden
 
-- The model must always see the source files the traceback names. The context step (`resolveloop/agent/context.py`) already reads them before every patch request.
+- The model must always see the source files the traceback names. The context step (`patchwarden/agent/context.py`) already reads them before every patch request.
 - Never trust a fix from the trace alone: the trace-only runs passed the original failing case but broke other behavior. This is why the verifier runs the full test suite, not just the reproducer.
 
 ## Oct 21: agent client check (A2 + A3)

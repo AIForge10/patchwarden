@@ -1,6 +1,6 @@
 {
   "incident_id": "demo-006",
-  "repo_url": "https://github.com/Satyabratadas/resolveloop-demo",
+  "repo_url": "https://github.com/Satyabratadas/patchwarden-demo",
   "commit_sha": "24f3050fc3e628854b4beeb31e9da23e825b0699",
   "error_type": "ValidationError",
   "message": "Known-good variant verification",

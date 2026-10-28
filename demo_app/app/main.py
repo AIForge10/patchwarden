@@ -10,7 +10,7 @@ app = FastAPI(title="checkout-demo")
 @app.post("/checkout", response_model=Order)
 def checkout(request: CheckoutRequest) -> Order:
     response = charge(request.amount, request.idempotency_key, request.provider_mode)
-    # This deliberate baseline defect is the incident ResolveLoop repairs.
+    # This deliberate baseline defect is the incident PatchWarden repairs.
     result = PaymentResult.model_validate(response)
     if result.status != "approved":
         return create_order(request.order_id, "failed")

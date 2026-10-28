@@ -1,0 +1,220 @@
+{
+  "format": "patchwarden-recording/1",
+  "recorded_at": "2026-10-28T09:42:34.689239+00:00",
+  "run": {
+    "run_id": "run-59eab39b679d",
+    "status": "PR_OPENED",
+    "patch": null,
+    "verification": null,
+    "discoveries": [],
+    "evidence_path": "evidence/run-59eab39b679d.json",
+    "pr_url": "https://github.com/Satyabratadas/patchwarden-demo/pull/1",
+    "incident_id": "cli-1793180505"
+  },
+  "events": [
+    {
+      "run_id": "run-59eab39b679d",
+      "seq": 1,
+      "stage": "BASELINING",
+      "severity": "info",
+      "message": "Checking out the pinned commit in a fresh sandbox",
+      "created_at": "2026-10-28T09:41:45.517986Z",
+      "metadata": {}
+    },
+    {
+      "run_id": "run-59eab39b679d",
+      "seq": 2,
+      "stage": "DIAGNOSING",
+      "severity": "info",
+      "message": "Baseline red with ValidationError; suite green",
+      "created_at": "2026-10-28T09:41:46.800576Z",
+      "metadata": {}
+    },
+    {
+      "run_id": "run-59eab39b679d",
+      "seq": 3,
+      "stage": "DIAGNOSING",
+      "severity": "info",
+      "message": "EVIDENCE: demo_app/app/main.py:14 - Attempting to validate payment response without required 'status' field causing Pydantic ValidationError\nHYPOTHESIS: The charge function returns a malformed payload lacking the 'status' field when provider_mode='malformed'\nUNCERTAINTY: medium - exact implementation of charge and why it returns that payload was not shown",
+      "created_at": "2026-10-28T09:41:49.791074Z",
+      "metadata": {}
+    },
+    {
+      "run_id": "run-59eab39b679d",
+      "seq": 4,
+      "stage": "PATCHING",
+      "severity": "info",
+      "message": "Attempt 1 of 3: requesting a patch",
+      "created_at": "2026-10-28T09:41:49.793926Z",
+      "metadata": {
+        "attempt": "1"
+      }
+    },
+    {
+      "run_id": "run-59eab39b679d",
+      "seq": 5,
+      "stage": "VERIFYING",
+      "severity": "info",
+      "message": "Attempt 1: verifying a patch to demo_app/app/main.py",
+      "created_at": "2026-10-28T09:41:53.201041Z",
+      "metadata": {
+        "attempt": "1"
+      }
+    },
+    {
+      "run_id": "run-59eab39b679d",
+      "seq": 6,
+      "stage": "VERIFIED",
+      "severity": "info",
+      "message": "Reproducer green, original suite green, protected files unchanged",
+      "created_at": "2026-10-28T09:41:53.940816Z",
+      "metadata": {
+        "attempt": "1"
+      }
+    },
+    {
+      "run_id": "run-59eab39b679d",
+      "seq": 7,
+      "stage": "CHALLENGING",
+      "severity": "info",
+      "message": "Challenging the patch with trusted scenarios",
+      "created_at": "2026-10-28T09:41:53.942395Z",
+      "metadata": {}
+    },
+    {
+      "run_id": "run-59eab39b679d",
+      "seq": 8,
+      "stage": "CHALLENGING",
+      "severity": "info",
+      "message": "retry_same_key {'attempts': 2} vs at_most_one_charge: holds",
+      "created_at": "2026-10-28T09:41:58.740719Z",
+      "metadata": {
+        "scenario_id": "retry_same_key",
+        "observed": "{'charge_count': 1}",
+        "rationale": "Retrying with the same idempotency key could produce duplicate charges if the charge function isn't truly idempotent."
+      }
+    },
+    {
+      "run_id": "run-59eab39b679d",
+      "seq": 9,
+      "stage": "CHALLENGING",
+      "severity": "info",
+      "message": "gateway_decline {'decline_code': 'declined'} vs failed_payment_not_completed: holds",
+      "created_at": "2026-10-28T09:41:59.179325Z",
+      "metadata": {
+        "scenario_id": "gateway_decline",
+        "observed": "{'status': 'failed'}",
+        "rationale": "A declined payment must result in a failed order; otherwise the system may incorrectly mark it as completed."
+      }
+    },
+    {
+      "run_id": "run-59eab39b679d",
+      "seq": 10,
+      "stage": "CHALLENGING",
+      "severity": "info",
+      "message": "normal_success {'amount': 500} vs success_exactly_one_order: holds",
+      "created_at": "2026-10-28T09:41:59.617758Z",
+      "metadata": {
+        "scenario_id": "normal_success",
+        "observed": "{'status': 'completed', 'order_exists': True}",
+        "rationale": "A successful payment should create exactly one order; any deviation indicates a remaining defect in order creation logic."
+      }
+    },
+    {
+      "run_id": "run-59eab39b679d",
+      "seq": 11,
+      "stage": "VERIFIED",
+      "severity": "info",
+      "message": "No confirmed second defect in 3 scenario(s)",
+      "created_at": "2026-10-28T09:41:59.619939Z",
+      "metadata": {}
+    },
+    {
+      "run_id": "run-59eab39b679d",
+      "seq": 12,
+      "stage": "VERIFIED",
+      "severity": "info",
+      "message": "Evidence written",
+      "created_at": "2026-10-28T09:41:59.621009Z",
+      "metadata": {
+        "evidence_path": "evidence/run-59eab39b679d.json"
+      }
+    },
+    {
+      "run_id": "run-59eab39b679d",
+      "seq": 13,
+      "stage": "PR_OPENED",
+      "severity": "info",
+      "message": "Opened human-review PR https://github.com/Satyabratadas/patchwarden-demo/pull/1",
+      "created_at": "2026-10-28T09:42:09.713093Z",
+      "metadata": {
+        "pr_url": "https://github.com/Satyabratadas/patchwarden-demo/pull/1",
+        "branch": "resolveloop/run-59eab39b679d",
+        "commit_sha": "7fa3aba87a21d278f13e2fd73e1e71555d07158f"
+      }
+    }
+  ],
+  "evidence": {
+    "baseline_sha": "24f3050fc3e628854b4beeb31e9da23e825b0699",
+    "commands": [
+      {
+        "argv": [
+          "python",
+          "-m",
+          "pytest",
+          "demo_app/tests/test_incident.py"
+        ],
+        "exit_code": 1,
+        "step": "baseline_reproducer"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "pytest",
+          "demo_app/tests/test_baseline.py"
+        ],
+        "exit_code": 0,
+        "step": "baseline_original_suite"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "pytest",
+          "demo_app/tests/test_incident.py"
+        ],
+        "exit_code": 0,
+        "step": "patched_reproducer"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "pytest",
+          "demo_app/tests/test_baseline.py"
+        ],
+        "exit_code": 0,
+        "step": "patched_suite"
+      }
+    ],
+    "discovery": {
+      "confirmed": [],
+      "experimental": true,
+      "scenarios_run": 3
+    },
+    "limitations": [
+      "Controlled seeded checkout demo"
+    ],
+    "model_id": "nvidia/nemotron-3-super-120b-a12b",
+    "patch_sha256": "616b4d6d985408e60656f0c2de9ae8acd3f91fda420930837eb13344f98268b1",
+    "protected_test_sha256": {
+      "demo_app/contracts/invariants.json": "6dd0c8bd1ec2cba1fa84eadb6b114e372a16e93a45ba9b89f4fdeaf5411dc3e5",
+      "demo_app/tests/test_baseline.py": "f2358a0f7c33be4386a8c9f3dfa8c4763eaa1f5f703a2008db57c16f904df2de",
+      "demo_app/tests/test_incident.py": "f38fade47db3a87daac780b263d748df291acc0f70eae8a9d7d9c709acfc12cc"
+    },
+    "run_id": "run-59eab39b679d",
+    "status": "VERIFIED",
+    "verified_at": "2026-10-28T09:41:59.620661+00:00"
+  }
+}

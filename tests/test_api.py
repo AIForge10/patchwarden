@@ -5,12 +5,12 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from resolveloop import config, ratelimit
-from resolveloop.api import webhooks
-from resolveloop.api.main import create_app
-from resolveloop.events import emit
-from resolveloop.models import IncidentEvidence, RunStatus
-from resolveloop.store import create_run, set_run_status
+from patchwarden import config, ratelimit
+from patchwarden.api import webhooks
+from patchwarden.api.main import create_app
+from patchwarden.events import emit
+from patchwarden.models import IncidentEvidence, RunStatus
+from patchwarden.store import create_run, set_run_status
 
 
 def _api_settings(tmp_path, monkeypatch) -> None:
@@ -63,7 +63,7 @@ def test_signed_webhook_is_accepted_and_deduplicated(tmp_path, monkeypatch) -> N
     body = json.dumps(payload).encode()
     signature = hmac.new(b"test-secret", body, hashlib.sha256).hexdigest()
     client = TestClient(create_app())
-    headers = {"X-ResolveLoop-Signature": f"sha256={signature}"}
+    headers = {"X-PatchWarden-Signature": f"sha256={signature}"}
     first = client.post("/webhooks/incident", content=body, headers=headers)
     second = client.post("/webhooks/incident", content=body, headers=headers)
     assert first.status_code == second.status_code == 202
@@ -89,7 +89,7 @@ def _signed_alert(client: TestClient, incident_id: str, **overrides):
     return client.post(
         "/webhooks/incident",
         content=body,
-        headers={"X-ResolveLoop-Signature": f"sha256={signature}"},
+        headers={"X-PatchWarden-Signature": f"sha256={signature}"},
     )
 
 
@@ -116,7 +116,7 @@ def test_oversized_webhook_is_rejected_before_a_run_starts(tmp_path, monkeypatch
     response = client.post(
         "/webhooks/incident",
         content=body,
-        headers={"X-ResolveLoop-Signature": f"sha256={signature}"},
+        headers={"X-PatchWarden-Signature": f"sha256={signature}"},
     )
     assert response.status_code == 413 and started == []
 
@@ -155,7 +155,7 @@ def test_run_status_shows_pr_and_evidence_from_the_event_log(tmp_path, monkeypat
 
 
 def test_recorded_run_replays_the_stored_event_log(tmp_path, monkeypatch) -> None:
-    from resolveloop.scripts.record_run import record
+    from patchwarden.scripts.record_run import record
 
     _api_settings(tmp_path, monkeypatch)
     incident = IncidentEvidence(

@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "resolveloop"
+name = "patchwarden"
 version = "0.1.0"
 description = "Evidence-gated autonomous incident-response agent."
 readme = "README.md"
@@ -36,7 +36,7 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["resolveloop*"]
+include = ["patchwarden*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

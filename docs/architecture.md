@@ -1,6 +1,6 @@
 # Architecture
 
-ResolveLoop turns one signed incident alert into, at most, one human-review pull request.
+PatchWarden turns one signed incident alert into, at most, one human-review pull request.
 The model proposes; trusted code decides. Every claim in the run state, the evidence
 bundle and the PR comes from a deterministic check, never from model output.
 
@@ -27,7 +27,7 @@ RECEIVED ─► BASELINING      fresh sandbox, detached checkout of the pinned S
              ▼
            evidence/<run_id>.json
              ▼  (OPEN_PR_ON_VERIFIED)
-           PR_OPENED         branch resolveloop/<run_id> on the pinned SHA, one commit, PR to default branch
+           PR_OPENED         branch patchwarden/<run_id> on the pinned SHA, one commit, PR to default branch
 ```
 
 Illegal transitions raise (`orchestrator._ALLOWED`); FAILED is reachable from any state and
@@ -40,7 +40,7 @@ always carries a `failure_code`. The sandbox is destroyed in a `finally` block.
 | Webhook payload, model output, repository content, test stdout, web search | Pinned human-authored tests and `contracts/invariants.json`, their SHA-256 hashes, `patch_policy`, the fixed argv in `sandbox/commands.py`, the verifier, the scenario runner and invariant checks |
 
 - The model never writes a diff: it returns full file contents for files it was shown, and
-  ResolveLoop builds the diff. Only `demo_app/app/**/*.py` may change; tests, contracts, CI,
+  PatchWarden builds the diff. Only `demo_app/app/**/*.py` may change; tests, contracts, CI,
   lockfiles, `.env*`, new/deleted/renamed/binary files are rejected before anything runs.
 - The verifier resets to the pinned SHA and applies the patch itself, clears bytecode caches,
   then runs the reproducer and original suite and re-hashes protected files.
@@ -56,7 +56,7 @@ human-authored catalog: scenario ID, invariant ID and bounded parameters only
 (`discovery/scenarios.py`). `catalog.validate_scenario` rejects anything else, and the
 rejection is logged. Accepted scenarios run through `discovery/runner.py` as a subprocess
 whose working directory is the patched sandbox checkout, so they exercise the code under
-review, not ResolveLoop's own copy. A trusted invariant judges each run. A violation counts
+review, not PatchWarden's own copy. A trusted invariant judges each run. A violation counts
 as confirmed only when it reproduces twice from a reset state.
 
 Discovery can never fail or downgrade a verified repair. Model or runner problems end as
@@ -70,10 +70,10 @@ incident fix (plan section 9, branch rule).
 
 `orchestrator.maybe_create_pr` requires VERIFIED with baseline red, reproducer green, suite
 green and oracle intact. It commits the exact verified file contents onto the pinned SHA
-(file modes preserved). A retried publish force-moves ResolveLoop's own branch instead of
+(file modes preserved). A retried publish force-moves PatchWarden's own branch instead of
 stacking commits, and `open_pull_request` returns an existing open PR rather than opening a
 second one. If GitHub fails, the run stays VERIFIED with its evidence and a `GITHUB_ERROR`
-event. It never claims PR_OPENED without a URL. ResolveLoop never merges or deploys.
+event. It never claims PR_OPENED without a URL. PatchWarden never merges or deploys.
 
 ## Progress UI (A7)
 
@@ -81,8 +81,8 @@ event. It never claims PR_OPENED without a URL. ResolveLoop never merges or depl
 
 - Live: `/ui/?run=<run_id>` polls `GET /runs/{id}` and `GET /runs/{id}/events?after=<seq>`,
   and shows `GET /runs/{id}/evidence` once the bundle exists.
-- Replay: `python -m resolveloop.scripts.record_run <run_id>` (or `make record RUN=…`) exports
-  the stored run, events and evidence to `resolveloop/ui/recordings/`. Then open
+- Replay: `python -m patchwarden.scripts.record_run <run_id>` (or `make record RUN=…`) exports
+  the stored run, events and evidence to `patchwarden/ui/recordings/`. Then open
   `/ui/?replay=recordings/<run_id>.json` (add `&speed=2` to play faster), or use
   "Play recording". The UI renders only stored data, as text. A PR link is shown only for a
   PR_OPENED run.
@@ -96,8 +96,8 @@ The API is a single Docker image (`Dockerfile`) that serves `/ui/`, `/health`, a
 signed webhook. Hosts must inject env vars; the image never contains `.env`.
 
 ```sh
-docker build -t resolveloop .
-docker run --rm -p 8000:8000 --env-file .env resolveloop
+docker build -t patchwarden .
+docker run --rm -p 8000:8000 --env-file .env patchwarden
 # then GET http://127.0.0.1:8000/health  →  {"ok": true, ...}
 ```
 
@@ -111,8 +111,8 @@ that can sign alerts and has a GitHub token would otherwise open a real PR.
 ## One command
 
 ```sh
-python -m resolveloop.scripts.run_incident          # ALLOWED_REPO_URL at its current HEAD
-python -m resolveloop.scripts.run_incident --sha <40-hex>
+python -m patchwarden.scripts.run_incident          # ALLOWED_REPO_URL at its current HEAD
+python -m patchwarden.scripts.run_incident --sha <40-hex>
 ```
 
 This uses the real model. It opens a real PR on `GITHUB_TARGET_REPO` when

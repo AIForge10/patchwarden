@@ -4,15 +4,15 @@ import json
 import subprocess
 from pathlib import Path
 
-from resolveloop import config
-from resolveloop.agent import patcher
-from resolveloop.agent.nebius_client import Reply
-from resolveloop.agent.prompts import DIAGNOSIS_SYSTEM
-from resolveloop.discovery import scenarios
-from resolveloop.models import CommandResult, IncidentEvidence, RunStatus
-from resolveloop.orchestrator import run_incident
-from resolveloop.store import list_events
-from resolveloop.verifier import baseline as baseline_mod
+from patchwarden import config
+from patchwarden.agent import patcher
+from patchwarden.agent.nebius_client import Reply
+from patchwarden.agent.prompts import DIAGNOSIS_SYSTEM
+from patchwarden.discovery import scenarios
+from patchwarden.models import CommandResult, IncidentEvidence, RunStatus
+from patchwarden.orchestrator import run_incident
+from patchwarden.store import list_events
+from patchwarden.verifier import baseline as baseline_mod
 
 ROOT = Path(__file__).resolve().parents[1]
 MAIN = (ROOT / "demo_app/app/main.py").read_text()
@@ -178,7 +178,7 @@ def test_verified_run_opens_pr_with_exactly_the_verified_code(
     assert commit["parents"] == [target["sha"]]
     assert commit["files"] == {"demo_app/app/main.py": ("100644", FIX)}
     pull = fake_github.pulls[0]
-    assert pull.title == "[ResolveLoop] Verified repair for incident demo-001"
+    assert pull.title == "[PatchWarden] Verified repair for incident demo-001"
     assert "HYPOTHESIS: malformed gateway response" in pull.body
     assert '"patch_sha256"' in pull.body  # evidence manifest embedded for reviewers
     assert "## Residual risks" in pull.body
@@ -286,7 +286,7 @@ def test_tavily_sources_reach_diagnosis_and_the_pr(target, monkeypatch, fake_git
     fake_github.base_sha = target["sha"]
     _fake_model(monkeypatch, [_file_reply("demo_app/app/main.py", FIX)])
     monkeypatch.setattr(
-        "resolveloop.orchestrator.search_error",
+        "patchwarden.orchestrator.search_error",
         lambda query: [{"title": "Pydantic validation", "url": "https://docs.pydantic.dev/errors"}],
     )
     result = run_incident(_incident(target))
@@ -302,7 +302,7 @@ def test_tavily_failure_does_not_block_a_verified_repair(target, monkeypatch) ->
     def boom(query):
         raise RuntimeError("tavily down")
 
-    monkeypatch.setattr("resolveloop.orchestrator.search_error", boom)
+    monkeypatch.setattr("patchwarden.orchestrator.search_error", boom)
     _fake_model(monkeypatch, [_file_reply("demo_app/app/main.py", FIX)])
     result = run_incident(_incident(target))
 

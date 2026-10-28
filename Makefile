@@ -1,4 +1,4 @@
-# Run inside the conda env:  conda activate resolveloop
+# Run inside the conda env:  conda activate patchwarden
 .PHONY: install hooks lock lint format test test-demo run serve probe incident record secrets
 
 install: hooks      ## install pinned deps + this package (editable)
@@ -25,19 +25,19 @@ test-demo:          ## demo app suite (test_incident is expected RED on the seed
 	python -m pytest demo_app/tests
 
 run:
-	uvicorn resolveloop.api.main:app --reload --port 8000
+	uvicorn patchwarden.api.main:app --reload --port 8000
 
 serve:              ## bind 0.0.0.0 (Docker / hosted). PORT defaults to 8000.
-	uvicorn resolveloop.api.main:app --host 0.0.0.0 --port $${PORT:-8000}
+	uvicorn patchwarden.api.main:app --host 0.0.0.0 --port $${PORT:-8000}
 
 probe:              ## Nebius model probe (A1)
-	python -m resolveloop.scripts.model_probe
+	python -m patchwarden.scripts.model_probe
 
 incident:           ## one incident end to end (real model; opens a PR if OPEN_PR_ON_VERIFIED + GitHub set)
-	python -m resolveloop.scripts.run_incident
+	python -m patchwarden.scripts.run_incident
 
 record:             ## export a run for UI replay: make record RUN=run-...
-	python -m resolveloop.scripts.record_run $(RUN)
+	python -m patchwarden.scripts.record_run $(RUN)
 
 secrets:            ## scan tracked files for leaked secrets
 	git ls-files -z | xargs -0 detect-secrets-hook --baseline .secrets.baseline  # pragma: allowlist secret

@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from resolveloop.config import Settings, public_config, validate_startup
+from patchwarden.config import Settings, public_config, validate_startup
 
 
 def _settings(**overrides) -> Settings:
