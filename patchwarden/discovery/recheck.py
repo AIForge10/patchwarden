@@ -19,4 +19,5 @@ def confirm_violation(handle, spec, catalog, baseline_commit: str = "") -> Disco
 
 
 def run_negative_control(handle, spec, catalog) -> bool:
-    return not evaluate_invariant(spec, execute_scenario(handle, spec), catalog)
+    """True when the scenario holds on the known-good control gateway (no false positive)."""
+    return not evaluate_invariant(spec, execute_scenario(handle, spec, control=True), catalog)

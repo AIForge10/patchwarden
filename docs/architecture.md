@@ -10,8 +10,8 @@ bundle and the PR comes from a deterministic check, never from model output.
 signed alert ──► POST /webhooks/incident   HMAC, allowlisted repo, exact 40-hex SHA, known reproducer
                    │  202 + run_id; a duplicate incident_id returns the same run and starts nothing
                    ▼  (background task)
-RECEIVED ─► BASELINING      fresh sandbox, detached checkout of the pinned SHA, hash protected files,
-             │               run the reproducer + original suite
+RECEIVED ─► BASELINING      fresh E2B sandbox + local workspace, detached checkout of the pinned SHA,
+             │               hash protected files, run the reproducer + original suite (in E2B)
              ├─► UNREPRODUCED   reproducer not red for the reported error type: stop, no model call
              ▼
            DIAGNOSING        model sees the OBSERVED red output, the source files it names,
@@ -24,6 +24,7 @@ RECEIVED ─► BASELINING      fresh sandbox, detached checkout of the pinned S
            VERIFIED          reproducer green, original suite green, protected hashes unchanged
              ▼  (RUN_DISCOVERY)
            CHALLENGING ─► CONFIRMED_DISCOVERY ─► VERIFIED   (experimental, see below)
+                              └─► PATCHING ⇄ VERIFYING ─► VERIFIED   (REPAIR_DISCOVERY, plan P2)
              ▼
            evidence/<run_id>.json
              ▼  (OPEN_PR_ON_VERIFIED)
@@ -33,11 +34,29 @@ RECEIVED ─► BASELINING      fresh sandbox, detached checkout of the pinned S
 Illegal transitions raise (`orchestrator._ALLOWED`); FAILED is reachable from any state and
 always carries a `failure_code`. The sandbox is destroyed in a `finally` block.
 
+## Sandbox
+
+`sandbox/e2b_runner.py` gives every run two disposable places:
+
+- **A local workspace** holding the pinned checkout. The agent reads source files and git
+  applies patches here. git never executes repository code.
+- **An E2B microVM** (when `E2B_API_KEY` is set; `SANDBOX_BACKEND=auto`). Every command that
+  runs repository code (pytest and the trusted scenario runner) executes there, on a fresh
+  copy of the current checkout. Network egress is limited to `pypi.org` and
+  `files.pythonhosted.org` for the pinned demo dependencies; GitHub, Nebius and every other
+  host are unreachable from inside. No key or token is ever sent into the sandbox. The
+  trusted runner and models module are copied to `/home/user/trusted`, outside the checkout.
+
+The sandbox ID and egress allowlist are recorded in the evidence manifest. Both are torn
+down in a `finally` block; the E2B lifetime cap (1 hour) reclaims a sandbox if the process
+dies. `SANDBOX_BACKEND=local` runs the same fixed argv in a local subprocess: offline tests
+use it, and so does a machine without an E2B key.
+
 ## Trust boundaries
 
 | Untrusted | Trusted |
 |---|---|
-| Webhook payload, model output, repository content, test stdout, web search | Pinned human-authored tests and `contracts/invariants.json`, their SHA-256 hashes, `patch_policy`, the fixed argv in `sandbox/commands.py`, the verifier, the scenario runner and invariant checks |
+| Webhook payload, model output, repository content, test stdout, web search | Pinned human-authored tests, `contracts/invariants.json` and the known-good control gateway, their SHA-256 hashes, `patch_policy`, the reproducer-ID → test mapping and fixed argv in `sandbox/commands.py`, the verifier, the scenario runner and invariant checks |
 
 - The model never writes a diff: it returns full file contents for files it was shown, and
   PatchWarden builds the diff. Only `demo_app/app/**/*.py` may change; tests, contracts, CI,
@@ -57,14 +76,21 @@ human-authored catalog: scenario ID, invariant ID and bounded parameters only
 rejection is logged. Accepted scenarios run through `discovery/runner.py` as a subprocess
 whose working directory is the patched sandbox checkout, so they exercise the code under
 review, not PatchWarden's own copy. A trusted invariant judges each run. A violation counts
-as confirmed only when it reproduces twice from a reset state.
+as confirmed only when (1) it reproduces twice from a reset state and (2) the same scenario
+**holds** when the runner swaps in the known-good control gateway
+(`demo_app/seed_variants/control/payments.py`, outside the patchable tree). The second check
+is the negative control: an oracle that also fires on correct code is not trusted, and the
+violation is logged as `DISCOVERY_UNCONFIRMED` instead of being claimed.
 
 Discovery can never fail or downgrade a verified repair. Model or runner problems end as
 `DISCOVERY_UNCONFIRMED` / `ORACLE_UNAVAILABLE` events and the run returns to VERIFIED.
-`verifier.verify_discovery_fix` can judge a secondary patch (confirmed oracle plus original
-gates), but the second repair loop (plan P2) is not wired: a confirmed defect is reported in
-the PR's "Additional scenarios" table as **unresolved**, and the PR carries only the verified
-incident fix (plan section 9, branch rule).
+By default a confirmed defect is reported in the PR's "Additional scenarios" table as
+**unresolved**, and the PR carries only the verified incident fix. With
+`REPAIR_DISCOVERY=true` (or `run_incident --repair-discovery`) the second repair loop (plan
+P2) runs: up to `MAX_PATCH_ATTEMPTS` patches on top of the verified fix, each judged by
+`verifier.verify_discovery_fix` (confirmed oracle now holds, original reproducer green, suite
+green, protected hashes intact). Only then does the combined diff ship; otherwise the first
+verified patch ships alone (plan section 9, branch rule).
 
 ## Publishing (A7)
 
@@ -125,7 +151,7 @@ records `GITHUB_ERROR`.
 | Item | Status |
 |---|---|
 | Nebius base URL and model IDs | Verified Oct 21 with `healthcheck_model()` (see `docs/feedback.md`) |
-| E2B | Not used yet: `sandbox/e2b_runner.py` is a local disposable-directory adapter with the same interface |
-| GitHub fine-grained token | Needs Contents + Pull requests read/write on the demo repo only; publisher is covered by mocked tests; live PR is the final judged run |
-| Hosted endpoint | Docker image + `GET /health`; deploy by injecting `.env` values. Real GitHub PR left for the final run |
+| E2B | Verified Oct 28 with e2b SDK 2.53.1: `Sandbox.create(network={"allow_out": [...], "deny_out": ["0.0.0.0/0"]})` blocks all egress but PyPI; non-zero exit raises `CommandExitException`, timeouts raise `TimeoutException` (mapped to exit 124) |
+| GitHub fine-grained token | Contents + Pull requests read/write on the demo repo only. Live PRs opened on `Satyabratadas/patchwarden-demo` (see `docs/evaluation.md`) |
+| Hosted endpoint | Docker image on Northflank: https://p01--patchwarden-api--smbsdvp245v8.code.run (`/health`, `/ui/`). Runs with `OPEN_PR_ON_VERIFIED=false` so a public URL cannot open PRs |
 | Tavily | Wired into diagnosis as untrusted hints; HTTPS results only; search failures skip to the observed failure and source files. Citations land in the evidence manifest and PR body |

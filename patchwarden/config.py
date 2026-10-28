@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sys
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     MAX_PATCH_ATTEMPTS: int = Field(default=3, ge=1, le=5)
     MAX_SCENARIOS: int = Field(default=4, ge=0, le=5)
     SANDBOX_TIMEOUT_SECONDS: int = Field(default=180, ge=1)
+    # auto: E2B when E2B_API_KEY is set, else a local disposable directory.
+    SANDBOX_BACKEND: Literal["auto", "e2b", "local"] = "auto"
     RUN_DISCOVERY: bool = True
     OPEN_PR_ON_VERIFIED: bool = True
     REPAIR_DISCOVERY: bool = False

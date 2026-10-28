@@ -1,12 +1,17 @@
 {
   "incident_id": "demo-003",
   "repo_url": "https://github.com/Satyabratadas/patchwarden-demo",
-  "commit_sha": "24f3050fc3e628854b4beeb31e9da23e825b0699",
+  "commit_sha": "1e83628cf0f20310c9da2a3454440a27be1a9daa",
   "error_type": "AssertionError",
-  "message": "Declined payment must not complete order",
-  "traceback": "Traceback (most recent call last):\n  File 'demo_app/app/main.py', line 16, in checkout\nAssertionError: order marked completed on declined payment",
-  "reproducer_id": "checkout_malformed_response",
-  "sanitized_request": {"order_id": "order-125", "amount": 120, "provider_mode": "decline"},
-  "environment": {"provider_mode": "decline"},
-  "timestamp": "2026-10-28T09:10:00Z"
+  "message": "Order completed although the payment was held for review",
+  "traceback": "AssertionError: an unapproved payment completed the order\nassert 'completed' != 'completed'",
+  "reproducer_id": "checkout_unapproved_payment",
+  "sanitized_request": {
+    "order_id": "order-318",
+    "amount": 40
+  },
+  "environment": {
+    "provider_mode": "review"
+  },
+  "timestamp": "2026-10-28T12:00:00Z"
 }

@@ -11,11 +11,28 @@ import sys
 from patchwarden.models import ScenarioSpec
 
 
-def _execute_local(spec) -> dict:
+def _execute_local(spec, control: bool = False) -> dict:
     # Imported here: under the sandbox subprocess these resolve to the checkout's demo_app.
-    from demo_app.app.main import checkout
-    from demo_app.app.models import CheckoutRequest
+    from demo_app.app import main
     from demo_app.app.payments import get_charge_count
+
+    if not control:
+        return _run_scenario(spec, main.checkout, get_charge_count)
+    # Negative control: the same checkout flow against the known-good gateway, which the
+    # patch policy keeps out of reach. A sound oracle must hold here.
+    from demo_app.seed_variants.control import payments as gateway
+
+    seeded = main.charge
+    gateway.reset_charges()
+    main.charge = gateway.charge
+    try:
+        return _run_scenario(spec, main.checkout, gateway.get_charge_count)
+    finally:
+        main.charge = seeded
+
+
+def _run_scenario(spec, checkout, get_charge_count) -> dict:
+    from demo_app.app.models import CheckoutRequest
     from demo_app.app.store import get_order, reset_state
 
     reset_state()
@@ -41,12 +58,14 @@ def _execute_local(spec) -> dict:
     raise ValueError("unsupported trusted scenario")
 
 
-def execute_scenario(handle, spec) -> dict:
+def execute_scenario(handle, spec, control: bool = False) -> dict:
     if handle is None:
-        return _execute_local(spec)
+        return _execute_local(spec, control)
     from patchwarden.sandbox.e2b_runner import exec_fixed
 
     argv = ["python", "-m", "patchwarden.discovery.runner", spec.model_dump_json()]
+    if control:
+        argv.append("--control")
     result = exec_fixed(handle, argv, "repo", timeout_s=60)
     lines = result.stdout.strip().splitlines()
     if result.exit_code != 0 or not lines:
@@ -65,4 +84,5 @@ def evaluate_invariant(spec, observed: dict, catalog: dict) -> bool:
 
 
 if __name__ == "__main__":
-    print(json.dumps(_execute_local(ScenarioSpec.model_validate_json(sys.argv[1]))))
+    spec = ScenarioSpec.model_validate_json(sys.argv[1])
+    print(json.dumps(_execute_local(spec, control="--control" in sys.argv[2:])))

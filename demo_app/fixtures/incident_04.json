@@ -1,12 +1,18 @@
 {
   "incident_id": "demo-004",
   "repo_url": "https://github.com/Satyabratadas/patchwarden-demo",
-  "commit_sha": "24f3050fc3e628854b4beeb31e9da23e825b0699",
+  "commit_sha": "1e83628cf0f20310c9da2a3454440a27be1a9daa",
   "error_type": "KeyError",
-  "message": "Missing inventory item in checkout",
-  "traceback": "Traceback (most recent call last):\n  File 'demo_app/app/main.py', line 12, in checkout\nKeyError: 'item_id'",
-  "reproducer_id": "checkout_malformed_response",
-  "sanitized_request": {"order_id": "order-126", "amount": 35},
-  "environment": {"provider_mode": "normal"},
-  "timestamp": "2026-10-28T09:15:00Z"
+  "message": "Checkout crashed for an unknown SKU",
+  "traceback": "Traceback (most recent call last):\n  File \"demo_app/app/main.py\", line 12, in checkout\n    reserve_item(request.sku)\n  File \"demo_app/app/store.py\", line 20, in reserve_item\n    _stock[sku] -= 1\nKeyError: 'sku-retired'",
+  "reproducer_id": "checkout_unknown_sku",
+  "sanitized_request": {
+    "order_id": "order-402",
+    "amount": 30,
+    "sku": "sku-retired"
+  },
+  "environment": {
+    "provider_mode": "normal"
+  },
+  "timestamp": "2026-10-28T12:00:00Z"
 }

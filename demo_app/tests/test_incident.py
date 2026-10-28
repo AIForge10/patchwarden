@@ -9,4 +9,4 @@ def test_checkout_malformed_response_reproducer() -> None:
     request = CheckoutRequest(
         order_id="bad", amount=50, idempotency_key="bad", provider_mode="malformed"
     )
-    checkout(request)
+    assert checkout(request).status == "failed"

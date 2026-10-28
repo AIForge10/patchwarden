@@ -195,3 +195,14 @@ def test_diff_marks_missing_final_newline(tmp_path):
         ["git", "apply", "--check", "p.diff"], cwd=tmp_path, capture_output=True, text=True
     )
     assert r.returncode == 0, r.stderr
+
+
+def test_assertion_only_failure_follows_the_test_imports(tmp_path):
+    """A plain assert names only the test; the code under test is what it imports."""
+    (tmp_path / "shop/tests").mkdir(parents=True)
+    (tmp_path / "shop/app.py").write_text("def total(): return 1\n")
+    (tmp_path / "shop/tests/test_total.py").write_text(
+        "import json\nfrom shop.app import total\n\ndef test_total():\n    assert total() == 2\n"
+    )
+    trace = "shop/tests/test_total.py:5: in test_total\nE   AssertionError: assert 1 == 2\n"
+    assert context.paths_from_traceback(trace, tmp_path) == ["shop/app.py"]

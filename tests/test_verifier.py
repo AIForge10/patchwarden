@@ -8,7 +8,7 @@ from patchwarden.sandbox.repository import apply_unified_diff, checkout_pinned_r
 from patchwarden.verifier.baseline import capture_baseline
 from patchwarden.verifier.patch_policy import assert_safe_patch, parse_changed_paths
 from patchwarden.verifier.verify import run_verification, verify_discovery_fix
-from tests.test_orchestrator import BUG, FIX, MAIN, _commit_variant, _incident
+from tests.test_orchestrator import BUG, FIX, MAIN, _incident, _known_good
 
 SAFE = "--- a/demo_app/app/main.py\n+++ b/demo_app/app/main.py\n@@ -1 +1 @@\n-a\n+b\n"
 
@@ -90,9 +90,11 @@ def test_verifier_fails_closed_if_protected_hashes_do_not_match(target) -> None:
 
 
 def test_discovery_fix_stays_green_when_the_oracle_holds(target) -> None:
-    handle = _sandbox(target)
+    sha = _known_good(target)
+    handle = create_sandbox("verify-known-good")
+    checkout_pinned_repo(handle, target["repo_url"], sha)
     try:
-        baseline = capture_baseline(handle, _incident(target))
+        baseline = capture_baseline(handle, _incident(target, commit_sha=sha))
         apply_unified_diff(handle, make_unified_diff("demo_app/app/main.py", MAIN, FIX))
         spec = ScenarioSpec(
             scenario_id="retry_same_key",
@@ -109,12 +111,7 @@ def test_discovery_fix_stays_green_when_the_oracle_holds(target) -> None:
 
 
 def test_discovery_fix_fails_when_the_second_defect_remains(target) -> None:
-    sha = _commit_variant(
-        target,
-        "demo_app/app/payments.py",
-        "    if idempotency_key not in _charges:\n        _charges[idempotency_key] = 1\n",
-        "    _charges[idempotency_key] = _charges.get(idempotency_key, 0) + 1\n",
-    )
+    sha = target["sha"]  # the seeded baseline carries the hidden double charge
     handle = create_sandbox("verify-secondary")
     checkout_pinned_repo(handle, target["repo_url"], sha)
     try:
@@ -128,5 +125,28 @@ def test_discovery_fix_fails_when_the_second_defect_remains(target) -> None:
         result = verify_discovery_fix(handle, baseline, spec)
         assert result.status == "VERIFY_FAILED"
         assert result.reproducer_green and result.suite_green
+    finally:
+        destroy_sandbox(handle)
+
+
+@pytest.mark.parametrize(
+    ("reproducer_id", "error_type"),
+    [
+        ("checkout_malformed_response", "ValidationError"),
+        ("checkout_unapproved_payment", "AssertionError"),
+        ("checkout_unknown_sku", "KeyError"),
+        ("checkout_gateway_timeout", "TimeoutError"),
+    ],
+)
+def test_each_seeded_incident_is_red_for_its_reason(target, reproducer_id, error_type) -> None:
+    handle = _sandbox(target)
+    try:
+        incident = _incident(target, reproducer_id=reproducer_id, error_type=error_type)
+        baseline = capture_baseline(handle, incident)
+        assert baseline["reproducer_failed"], baseline["reproducer"]["stdout"][-500:]
+        assert baseline["original_suite"]["exit_code"] == 0
+        assert "demo_app/seed_variants/control/payments.py" in baseline["test_hashes"]
+        wrong = _incident(target, reproducer_id=reproducer_id, error_type="ZeroDivisionError")
+        assert not capture_baseline(handle, wrong)["reproducer_failed"]
     finally:
         destroy_sandbox(handle)

@@ -9,6 +9,8 @@ from pathlib import Path
 _PY_TRACE = re.compile(r'File "([^"]+)", line \d+')
 _PYTEST_LINE = re.compile(r"^\s*([\w./\\-]+\.py):\d+", re.M)
 
+_IMPORT = re.compile(r"^\s*(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))", re.M)
+
 _NEVER_READ = (".env", ".pem", ".key", "secrets")
 _SKIP_PARTS = ("site-packages", "/lib/python", "<frozen", ".git/")
 
@@ -19,9 +21,33 @@ def _is_test_file(path: str) -> bool:
 
 
 def paths_from_traceback(traceback: str, repo_root, max_files: int = 5) -> list:
-    """Return repo-relative source files named in the traceback (tests excluded)."""
+    """Return repo-relative source files named in the traceback (tests excluded).
+
+    A plain assertion failure names only the test. Then the code under test is what
+    that test imports from the repo, so follow its imports instead of showing nothing.
+    """
     root = Path(repo_root).resolve()
     raw = _PY_TRACE.findall(traceback) + _PYTEST_LINE.findall(traceback)
+    found = _source_paths(raw, root)
+    if not found:
+        tests = [path for path in _repo_paths(raw, root) if _is_test_file(path)]
+        found = _source_paths(_imported_paths(tests, root), root)
+    return found[:max_files]
+
+
+def _imported_paths(test_paths: list, root: Path) -> list:
+    modules = []
+    for test in test_paths:
+        for match in _IMPORT.finditer((root / test).read_text(errors="replace")):
+            modules.append(match.group(1) or match.group(2))
+    paths = []
+    for module in modules:
+        base = module.replace(".", "/")
+        paths += [f"{base}.py", f"{base}/__init__.py"]
+    return paths
+
+
+def _repo_paths(raw: list, root: Path) -> list:
     found = []
     for item in raw:
         if any(part in item for part in _SKIP_PARTS):
@@ -29,15 +55,16 @@ def paths_from_traceback(traceback: str, repo_root, max_files: int = 5) -> list:
         p = Path(item)
         candidate = (p if p.is_absolute() else root / p).resolve()
         try:
-            rel = candidate.relative_to(root)
+            rel_str = candidate.relative_to(root).as_posix()
         except ValueError:
             continue  # outside the repo
-        rel_str = rel.as_posix()
-        if not candidate.is_file() or _is_test_file(rel_str):
-            continue
-        if rel_str not in found:
+        if candidate.is_file() and rel_str not in found:
             found.append(rel_str)
-    return found[:max_files]
+    return found
+
+
+def _source_paths(raw: list, root: Path) -> list:
+    return [path for path in _repo_paths(raw, root) if not _is_test_file(path)]
 
 
 def select_context_paths(traceback: str, repo_root, max_files: int = 5) -> list:

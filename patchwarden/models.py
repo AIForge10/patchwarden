@@ -87,6 +87,7 @@ class DiscoveryResult(BaseModel):
     violated: bool
     reproduced_twice: bool = False
     baseline_commit: str = ""
+    control_clean: bool | None = None  # None: negative control not run
     repaired: bool = False
 
 

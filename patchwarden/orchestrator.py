@@ -14,7 +14,7 @@ from patchwarden.agent.nebius_client import ModelUnavailable
 from patchwarden.agent.patcher import diagnose, propose_patch, repair_until_verified
 from patchwarden.agent.research import format_sources, search_error
 from patchwarden.discovery.catalog import load_invariants
-from patchwarden.discovery.recheck import confirm_violation
+from patchwarden.discovery.recheck import confirm_violation, run_negative_control
 from patchwarden.discovery.scenarios import propose_scenarios
 from patchwarden.events import emit
 from patchwarden.github import client as github_client
@@ -95,6 +95,7 @@ def run_incident(incident: IncidentEvidence) -> RunResult:
     try:
         advance(run_id, RunStatus.BASELINING, "Checking out the pinned commit in a fresh sandbox")
         handle = create_sandbox(run_id)
+        emit(run_id, "BASELINING", f"Sandbox ready: {handle.backend}", handle.describe())
         checkout_pinned_repo(handle, incident.repo_url, incident.commit_sha)
         try:
             baseline = capture_baseline(handle, incident)
@@ -192,6 +193,9 @@ def run_incident(incident: IncidentEvidence) -> RunResult:
             result.discoveries = challenge(result, handle, baseline)
         manifest = build_manifest(result, baseline["test_hashes"], commands)
         manifest["model_id"] = config.NEBIUS_MODEL_REASONING
+        manifest["incident_id"] = incident.incident_id
+        manifest["reproducer_id"] = incident.reproducer_id
+        manifest["sandbox"] = handle.describe()
         if sources:
             manifest["tavily_sources"] = [
                 {"title": item.get("title", ""), "url": item.get("url", "")} for item in sources
@@ -201,6 +205,12 @@ def run_incident(incident: IncidentEvidence) -> RunResult:
                 "experimental": True,
                 "scenarios_run": len(result.discoveries),
                 "confirmed": [d.scenario.scenario_id for d in result.discoveries if _confirmed(d)],
+                "negative_controls": {
+                    d.scenario.scenario_id: d.control_clean
+                    for d in result.discoveries
+                    if d.control_clean is not None
+                },
+                "repaired": [d.scenario.scenario_id for d in result.discoveries if d.repaired],
             }
         result.evidence_path = write_evidence_bundle(run_id, manifest)
         emit(run_id, "VERIFIED", "Evidence written", {"evidence_path": result.evidence_path})
@@ -218,12 +228,17 @@ def run_incident(incident: IncidentEvidence) -> RunResult:
 
 
 def _confirmed(discovery: DiscoveryResult) -> bool:
-    return discovery.violated and discovery.reproduced_twice
+    """Violated twice on the patched checkout, and held on the known-good control."""
+    return discovery.violated and discovery.reproduced_twice and discovery.control_clean is True
 
 
 def _verdict(discovery: DiscoveryResult) -> str:
     if _confirmed(discovery):
-        return "violated, reproduced twice"
+        return "violated, reproduced twice, control clean"
+    if discovery.reproduced_twice:
+        if discovery.control_clean is False:
+            return "violated, but also on the known-good control: oracle not trusted"
+        return "violated twice, negative control unavailable: not claimed"
     return "violated once, not reproduced" if discovery.violated else "holds"
 
 
@@ -412,6 +427,17 @@ def challenge(
                 "warning",
             )
             continue
+        if found.reproduced_twice:
+            try:
+                found.control_clean = run_negative_control(handle, spec, catalog)
+            except Exception as error:
+                emit(
+                    run_id,
+                    "CHALLENGING",
+                    f"{label}: negative control could not run ({type(error).__name__})",
+                    {"failure_code": "ORACLE_UNAVAILABLE"},
+                    "warning",
+                )
         discoveries.append(found)
         emit(
             run_id,
@@ -420,6 +446,7 @@ def challenge(
             {
                 "scenario_id": spec.scenario_id,
                 "observed": found.observed,
+                "control_clean": found.control_clean,
                 "rationale": spec.rationale,
             },
         )
@@ -447,7 +474,7 @@ def challenge(
             emit(
                 run_id,
                 "CHALLENGING",
-                "A violation did not reproduce; not claimed",
+                "A violation did not survive repeat and negative-control checks; not claimed",
                 {"failure_code": "DISCOVERY_UNCONFIRMED"},
                 "warning",
             )
@@ -477,10 +504,19 @@ def _discovery_section(discoveries: list[DiscoveryResult]) -> list[str]:
     return [
         "## Additional scenarios (experimental)",
         "Chosen by the model from the human-authored catalog; judged by trusted invariant "
-        "code against the patched checkout, each run twice. A confirmed defect is reported "
-        "here only: it is not repaired in this PR.",
+        "code against the patched checkout, each run twice. A violation is confirmed only if "
+        "it reproduces and the same scenario holds on the known-good control gateway.",
         "\n".join(rows),
     ]
+
+
+def _discovery_risk(discoveries: list[DiscoveryResult]) -> str:
+    if any(getattr(d, "repaired", False) for d in discoveries):
+        return (
+            "- Discovery is experimental. The second fix in this PR was found and verified "
+            "by the agent; review it as carefully as the incident fix."
+        )
+    return "- Discovery is experimental; a confirmed second defect is reported here, not repaired."
 
 
 def _tavily_section(manifest: dict) -> str:
@@ -516,7 +552,7 @@ def _pr_body(result: RunResult, manifest: dict) -> str:
         *_discovery_section(result.discoveries),
         "## Residual risks",
         "- Passing tests are bounded evidence, not mathematical proof.",
-        "- Discovery is experimental; a confirmed second defect is reported here, not repaired.",
+        _discovery_risk(result.discoveries),
         "- Seeded demo defects only. PatchWarden never merges or deploys.",
         "## Tavily sources actually consulted",
         _tavily_section(manifest),

@@ -1,8 +1,13 @@
 from .e2b_runner import SandboxHandle, exec_fixed
 
-_REPRODUCERS = {
-    "checkout_malformed_response": ["python", "-m", "pytest", "demo_app/tests/test_incident.py"]
+# Trusted mapping: an alert names a reproducer ID, never a path or a command.
+REPRODUCER_TESTS = {
+    "checkout_malformed_response": "demo_app/tests/test_incident.py",
+    "checkout_unapproved_payment": "demo_app/tests/test_incident_review.py",
+    "checkout_unknown_sku": "demo_app/tests/test_incident_inventory.py",
+    "checkout_gateway_timeout": "demo_app/tests/test_incident_timeout.py",
 }
+_REPRODUCERS = {key: ["python", "-m", "pytest", path] for key, path in REPRODUCER_TESTS.items()}
 
 
 def install_dependencies(handle: SandboxHandle, repo_dir: str = "repo"):
