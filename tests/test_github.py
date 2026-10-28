@@ -3,8 +3,8 @@
 import pytest
 from github import GithubException
 
-from resolveloop import config
-from resolveloop.github import client
+from patchwarden import config
+from patchwarden.github import client
 
 BASE = "b" * 40
 
@@ -17,7 +17,7 @@ def test_commit_lands_on_pinned_sha_with_only_verified_files(fake_github) -> Non
     )
 
     commit = fake_github.commits[sha]
-    assert branch == "resolveloop/run-1" and fake_github.refs[branch] == sha
+    assert branch == "patchwarden/run-1" and fake_github.refs[branch] == sha
     assert commit["parents"] == [BASE]
     assert commit["files"] == {
         "demo_app/app/main.py": ("100644", "new\n"),
@@ -37,12 +37,12 @@ def test_republish_replaces_the_commit_instead_of_stacking(fake_github) -> None:
 
 def test_commit_refuses_empty_change(fake_github) -> None:
     with pytest.raises(ValueError):
-        client.commit_patch("resolveloop/run-1", BASE, {}, "fix")
+        client.commit_patch("patchwarden/run-1", BASE, {}, "fix")
 
 
 def test_open_pull_request_is_idempotent(fake_github) -> None:
-    first = client.open_pull_request("resolveloop/run-1", "body", title="[ResolveLoop] t")
-    second = client.open_pull_request("resolveloop/run-1", "body", title="[ResolveLoop] t")
+    first = client.open_pull_request("patchwarden/run-1", "body", title="[PatchWarden] t")
+    second = client.open_pull_request("patchwarden/run-1", "body", title="[PatchWarden] t")
 
     assert first == second and len(fake_github.pulls) == 1
     assert fake_github.pulls[0].base == "main"

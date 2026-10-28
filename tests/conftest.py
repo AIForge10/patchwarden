@@ -10,9 +10,9 @@ from types import SimpleNamespace
 import pytest
 from github import GithubException, UnknownObjectException
 
-from resolveloop import config
-from resolveloop.github import client as github_client
-from resolveloop.ratelimit import limiter
+from patchwarden import config
+from patchwarden.github import client as github_client
+from patchwarden.ratelimit import limiter
 
 ROOT = Path(__file__).resolve().parents[1]
 

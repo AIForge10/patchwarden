@@ -1,7 +1,7 @@
 # Three-minute demo storyboard
 
 Disclosure, spoken once: this controlled checkout app contains seeded defects.
-ResolveLoop receives the first incident. The second defect is not in the agent
+PatchWarden receives the first incident. The second defect is not in the agent
 prompt. Every claim is checked against prewritten tests and invariants.
 
 ## 0:00–0:20 — Signed alert
@@ -11,7 +11,7 @@ baseline). Start the API and send the signed alert:
 
 ```sh
 make run
-python -m resolveloop.scripts.send_demo_alert --fixture demo_app/fixtures/incident_01.json
+python -m patchwarden.scripts.send_demo_alert --fixture demo_app/fixtures/incident_01.json
 ```
 
 Open `/ui/?run=<run_id>`. Takeaway: a real signed trigger, not a manual prompt.

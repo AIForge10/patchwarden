@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from resolveloop.agent import context, nebius_client, patcher
-from resolveloop.agent.nebius_client import ModelUnavailable
+from patchwarden.agent import context, nebius_client, patcher
+from patchwarden.agent.nebius_client import ModelUnavailable
 
 TRACE = """\
 buggy_checkout.py:10: in checkout
@@ -126,7 +126,7 @@ def test_healthcheck_reports_missing_model(monkeypatch):
 
 
 def test_diagnosis_prompt_marks_search_results_untrusted():
-    from resolveloop.agent.prompts import build_diagnosis_prompt
+    from patchwarden.agent.prompts import build_diagnosis_prompt
 
     text = build_diagnosis_prompt("trace", {"a.py": "x = 1"}, "- Hint: https://example.com/x")
     assert "untrusted" in text.lower()
@@ -134,7 +134,7 @@ def test_diagnosis_prompt_marks_search_results_untrusted():
 
 
 def test_search_error_is_noop_without_a_key():
-    from resolveloop.agent.research import search_error
+    from patchwarden.agent.research import search_error
 
     assert search_error("KeyError") == []
 
@@ -142,8 +142,8 @@ def test_search_error_is_noop_without_a_key():
 def test_search_error_keeps_https_results_only(monkeypatch):
     import tavily
 
-    from resolveloop import config as cfg
-    from resolveloop.agent.research import search_error
+    from patchwarden import config as cfg
+    from patchwarden.agent.research import search_error
 
     monkeypatch.setattr(cfg, "TAVILY_API_KEY", "k")
 

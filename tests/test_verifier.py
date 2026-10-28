@@ -1,13 +1,13 @@
 import pytest
 
-from resolveloop.agent.context import make_unified_diff
-from resolveloop.discovery.catalog import load_invariants
-from resolveloop.models import PatchCandidate, ScenarioSpec
-from resolveloop.sandbox.e2b_runner import create_sandbox, destroy_sandbox
-from resolveloop.sandbox.repository import apply_unified_diff, checkout_pinned_repo
-from resolveloop.verifier.baseline import capture_baseline
-from resolveloop.verifier.patch_policy import assert_safe_patch, parse_changed_paths
-from resolveloop.verifier.verify import run_verification, verify_discovery_fix
+from patchwarden.agent.context import make_unified_diff
+from patchwarden.discovery.catalog import load_invariants
+from patchwarden.models import PatchCandidate, ScenarioSpec
+from patchwarden.sandbox.e2b_runner import create_sandbox, destroy_sandbox
+from patchwarden.sandbox.repository import apply_unified_diff, checkout_pinned_repo
+from patchwarden.verifier.baseline import capture_baseline
+from patchwarden.verifier.patch_policy import assert_safe_patch, parse_changed_paths
+from patchwarden.verifier.verify import run_verification, verify_discovery_fix
 from tests.test_orchestrator import BUG, FIX, MAIN, _commit_variant, _incident
 
 SAFE = "--- a/demo_app/app/main.py\n+++ b/demo_app/app/main.py\n@@ -1 +1 @@\n-a\n+b\n"

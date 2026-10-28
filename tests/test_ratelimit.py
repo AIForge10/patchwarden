@@ -1,6 +1,6 @@
 """Sliding-window limiter: no network."""
 
-from resolveloop.ratelimit import SlidingWindow
+from patchwarden.ratelimit import SlidingWindow
 
 
 def test_window_allows_then_blocks_then_frees() -> None:

@@ -3,7 +3,7 @@ import hmac
 
 import pytest
 
-from resolveloop.security import assert_allowed_repo, redact_text, verify_webhook_signature
+from patchwarden.security import assert_allowed_repo, redact_text, verify_webhook_signature
 
 
 def test_webhook_signature_and_redaction() -> None:

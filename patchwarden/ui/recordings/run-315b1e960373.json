@@ -1,0 +1,190 @@
+{
+  "format": "patchwarden-recording/1",
+  "recorded_at": "2026-10-27T16:22:27.563459+00:00",
+  "run": {
+    "run_id": "run-315b1e960373",
+    "status": "VERIFIED",
+    "patch": null,
+    "verification": null,
+    "discoveries": [],
+    "evidence_path": "evidence/run-315b1e960373.json",
+    "pr_url": null,
+    "incident_id": "demo-001"
+  },
+  "events": [
+    {
+      "run_id": "run-315b1e960373",
+      "seq": 1,
+      "stage": "BASELINING",
+      "severity": "info",
+      "message": "Checking out the pinned commit in a fresh sandbox",
+      "created_at": "2026-10-27T16:22:25.524104Z",
+      "metadata": {}
+    },
+    {
+      "run_id": "run-315b1e960373",
+      "seq": 2,
+      "stage": "DIAGNOSING",
+      "severity": "info",
+      "message": "Baseline red with ValidationError; suite green",
+      "created_at": "2026-10-27T16:22:26.310102Z",
+      "metadata": {}
+    },
+    {
+      "run_id": "run-315b1e960373",
+      "seq": 3,
+      "stage": "DIAGNOSING",
+      "severity": "info",
+      "message": "EVIDENCE: demo_app/app/main.py:14 - validates an unchecked gateway payload\nHYPOTHESIS: malformed gateway response raises ValidationError\nUNCERTAINTY: low - trace is direct",
+      "created_at": "2026-10-27T16:22:26.311290Z",
+      "metadata": {}
+    },
+    {
+      "run_id": "run-315b1e960373",
+      "seq": 4,
+      "stage": "PATCHING",
+      "severity": "info",
+      "message": "Attempt 1 of 3: requesting a patch",
+      "created_at": "2026-10-27T16:22:26.312986Z",
+      "metadata": {
+        "attempt": "1"
+      }
+    },
+    {
+      "run_id": "run-315b1e960373",
+      "seq": 5,
+      "stage": "VERIFYING",
+      "severity": "info",
+      "message": "Attempt 1: verifying a patch to demo_app/app/main.py",
+      "created_at": "2026-10-27T16:22:26.334748Z",
+      "metadata": {
+        "attempt": "1"
+      }
+    },
+    {
+      "run_id": "run-315b1e960373",
+      "seq": 6,
+      "stage": "VERIFIED",
+      "severity": "info",
+      "message": "Reproducer green, original suite green, protected files unchanged",
+      "created_at": "2026-10-27T16:22:27.093107Z",
+      "metadata": {
+        "attempt": "1"
+      }
+    },
+    {
+      "run_id": "run-315b1e960373",
+      "seq": 7,
+      "stage": "CHALLENGING",
+      "severity": "info",
+      "message": "Challenging the patch with trusted scenarios",
+      "created_at": "2026-10-27T16:22:27.094733Z",
+      "metadata": {}
+    },
+    {
+      "run_id": "run-315b1e960373",
+      "seq": 8,
+      "stage": "CHALLENGING",
+      "severity": "info",
+      "message": "normal_success {'amount': 10} vs success_exactly_one_order: holds",
+      "created_at": "2026-10-27T16:22:27.549929Z",
+      "metadata": {
+        "scenario_id": "normal_success",
+        "observed": "{'status': 'completed', 'order_exists': True}",
+        "rationale": "happy path still holds"
+      }
+    },
+    {
+      "run_id": "run-315b1e960373",
+      "seq": 9,
+      "stage": "VERIFIED",
+      "severity": "info",
+      "message": "No confirmed second defect in 1 scenario(s)",
+      "created_at": "2026-10-27T16:22:27.552424Z",
+      "metadata": {}
+    },
+    {
+      "run_id": "run-315b1e960373",
+      "seq": 10,
+      "stage": "VERIFIED",
+      "severity": "info",
+      "message": "Evidence written",
+      "created_at": "2026-10-27T16:22:27.553437Z",
+      "metadata": {
+        "evidence_path": "evidence/run-315b1e960373.json"
+      }
+    },
+    {
+      "run_id": "run-315b1e960373",
+      "seq": 11,
+      "stage": "VERIFIED",
+      "severity": "info",
+      "message": "PR step disabled by OPEN_PR_ON_VERIFIED",
+      "created_at": "2026-10-27T16:22:27.554065Z",
+      "metadata": {}
+    }
+  ],
+  "evidence": {
+    "baseline_sha": "e0a5e4f27f73e4777f4828e43d31f75edc309b86",
+    "commands": [
+      {
+        "argv": [
+          "python",
+          "-m",
+          "pytest",
+          "demo_app/tests/test_incident.py"
+        ],
+        "exit_code": 1,
+        "step": "baseline_reproducer"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "pytest",
+          "demo_app/tests/test_baseline.py"
+        ],
+        "exit_code": 0,
+        "step": "baseline_original_suite"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "pytest",
+          "demo_app/tests/test_incident.py"
+        ],
+        "exit_code": 0,
+        "step": "patched_reproducer"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "pytest",
+          "demo_app/tests/test_baseline.py"
+        ],
+        "exit_code": 0,
+        "step": "patched_suite"
+      }
+    ],
+    "discovery": {
+      "confirmed": [],
+      "experimental": true,
+      "scenarios_run": 1
+    },
+    "limitations": [
+      "Controlled seeded checkout demo"
+    ],
+    "model_id": "nvidia/nemotron-3-super-120b-a12b",
+    "patch_sha256": "380ea906c17e1b7973ef334ebcf435c9f802f0d177676f7a0b419399312fdadb",
+    "protected_test_sha256": {
+      "demo_app/contracts/invariants.json": "6dd0c8bd1ec2cba1fa84eadb6b114e372a16e93a45ba9b89f4fdeaf5411dc3e5",
+      "demo_app/tests/test_baseline.py": "f2358a0f7c33be4386a8c9f3dfa8c4763eaa1f5f703a2008db57c16f904df2de",
+      "demo_app/tests/test_incident.py": "f38fade47db3a87daac780b263d748df291acc0f70eae8a9d7d9c709acfc12cc"
+    },
+    "run_id": "run-315b1e960373",
+    "status": "VERIFIED",
+    "verified_at": "2026-10-27T16:22:27.553076+00:00"
+  }
+}

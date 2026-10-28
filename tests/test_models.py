@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from resolveloop.models import (
+from patchwarden.models import (
     CommandResult,
     DiscoveryResult,
     IncidentEvidence,

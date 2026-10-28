@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from resolveloop import config
-from resolveloop.agent.nebius_client import ModelUnavailable
-from resolveloop.scripts import model_probe
+from patchwarden import config
+from patchwarden.agent.nebius_client import ModelUnavailable
+from patchwarden.scripts import model_probe
 
 
 def test_probe_exits_when_keys_are_missing(monkeypatch) -> None:
