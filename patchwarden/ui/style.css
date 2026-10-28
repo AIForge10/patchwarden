@@ -90,6 +90,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px; }
 .pipeline li[data-state="done"] { background: var(--ok-bg); color: var(--ok); border-color: transparent; }
 .pipeline li[data-state="current"] { border-color: var(--accent); color: var(--accent); }
 .pipeline li[data-state="stopped"] { background: var(--bad-bg); color: var(--bad); border-color: transparent; }
+.pipeline li[data-state="skipped"] { border-style: dashed; }
 
 .grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 1rem; }
 .grid .panel { margin-bottom: 0; }
@@ -122,3 +123,33 @@ dl.kv dd { margin: 0; font-family: var(--mono); overflow-wrap: anywhere; white-s
 .recent a { font-family: var(--mono); }
 
 .error { background: var(--bad-bg); color: var(--bad); padding: .75rem 1rem; border-radius: 8px; }
+
+/* Home */
+.hero h1 { font-size: 1.6rem; margin-bottom: .5rem; }
+.hero p { margin: 0 0 .75rem; max-width: 52rem; }
+.stack { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 .75rem; padding: 0; }
+.stack li { padding: .15rem .6rem; border-radius: 999px; border: 1px solid var(--line); font-size: .8rem; color: var(--muted); }
+.links { display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; margin: 0; }
+
+.cases { list-style: none; margin: .5rem 0 0; padding: 0; }
+.cases li { display: flex; align-items: center; gap: .9rem; padding: .65rem 0; border-top: 1px solid var(--line); }
+.cases li:first-child { border-top: 0; }
+.case-id { font-family: var(--mono); font-weight: 700; color: var(--accent); min-width: 1.6rem; }
+.case-body { flex: 1 1 auto; min-width: 0; }
+.case-body .small { margin-top: .15rem; overflow-wrap: anywhere; }
+.run-live { background: var(--accent); border-color: var(--accent); color: #fff; white-space: nowrap; }
+.run-live:disabled { background: var(--pending-bg); border-color: var(--line); color: var(--muted); cursor: not-allowed; }
+@media (max-width: 520px) { .cases li { flex-wrap: wrap; } .run-live { width: 100%; } }
+
+/* Run page */
+.sources { margin: .35rem 0 0; padding-left: 1.1rem; font-size: .82rem; }
+.sources li { margin: .2rem 0; overflow-wrap: anywhere; }
+.diff {
+  margin: 0; padding: .75rem; overflow-x: auto; border-radius: 8px; background: var(--bg);
+  font: .8rem/1.45 var(--mono); border: 1px solid var(--line);
+}
+.diff span { display: block; white-space: pre; }
+.diff .add { background: var(--ok-bg); color: var(--ok); }
+.diff .del { background: var(--bad-bg); color: var(--bad); }
+.diff .hunk { color: var(--accent); }
+.diff .file { color: var(--muted); font-weight: 600; }

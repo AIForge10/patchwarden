@@ -131,8 +131,28 @@ docker run --rm -p 8000:8000 --env-file .env patchwarden
 Required to boot: `WEBHOOK_SECRET`, `ALLOWED_REPO_URL`. Nebius and GitHub keys stay optional
 so the UI can replay recordings on a host that is not yet wired to the model.
 
-On a public URL set `OPEN_PR_ON_VERIFIED=false` until the final judged run. A hosted instance
-that can sign alerts and has a GitHub token would otherwise open a real PR.
+On a public URL set `OPEN_PR_ON_VERIFIED=false`. A hosted instance that can sign alerts and
+has a GitHub token would otherwise open a real PR.
+
+### Public live demo (`api/demo.py`)
+
+`GET /demo` lists the six bundled alerts and whether live runs are available; `POST /demo/runs`
+with `{"case": "01"}`…`"06"` starts one. The visitor chooses a case number and nothing else:
+the alert is read from `demo_app/fixtures/` (copied into the image as data) and goes through the
+same gates as a signed alert, under a fresh `…-live-<random>` incident ID. Guards, all fail-closed:
+
+| Guard | Response |
+|---|---|
+| `PUBLIC_DEMO_RUNS_PER_DAY=0` (default) | 403, button disabled with the reason |
+| `OPEN_PR_ON_VERIFIED=true` | 403: public runs must never open PRs |
+| no E2B key (`use_e2b()` false) | 403: repository code must not run in the web server |
+| model not configured | 403 |
+| a live run already in progress | 409 with `X-Run-Id`, so the UI opens that run instead |
+| daily cap reached (UTC day, in memory) | 429 |
+
+Case 02 turns on the second repair loop for that run only (`run_incident(..., repair_discovery=True)`),
+without touching the global setting. `GET /health` reports the model ID, sandbox backend, whether
+Tavily and GitHub are configured, and whether the live demo is on, never secret values.
 
 ## One command
 

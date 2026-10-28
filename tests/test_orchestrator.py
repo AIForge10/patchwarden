@@ -13,6 +13,7 @@ from patchwarden.models import CommandResult, IncidentEvidence, RunStatus
 from patchwarden.orchestrator import run_incident
 from patchwarden.store import list_events
 from patchwarden.verifier import baseline as baseline_mod
+from patchwarden.verifier.evidence import verify_manifest_integrity
 
 ROOT = Path(__file__).resolve().parents[1]
 MAIN = (ROOT / "demo_app/app/main.py").read_text()
@@ -399,3 +400,29 @@ def test_violation_on_the_known_good_control_is_not_claimed(target, monkeypatch)
     manifest = json.loads(Path(result.evidence_path).read_text())
     assert manifest["discovery"]["confirmed"] == []
     assert manifest["discovery"]["negative_controls"] == {"retry_same_key": False}
+
+
+def test_repair_override_applies_to_one_run_and_manifest_carries_the_patch(
+    target, monkeypatch
+) -> None:
+    payments = (Path(target["repo_url"]) / "demo_app/app/payments.py").read_text()
+    monkeypatch.setattr(config, "RUN_DISCOVERY", True)
+    monkeypatch.setattr(config, "REPAIR_DISCOVERY", False)
+    _fake_model(
+        monkeypatch,
+        [
+            _file_reply("demo_app/app/main.py", FIX),
+            _file_reply("demo_app/app/payments.py", payments.replace(HIDDEN, CLEAN)),
+        ],
+        json.dumps(SCENARIOS),
+    )
+    result = run_incident(_incident(target), repair_discovery=True)
+
+    (retry,) = [d for d in result.discoveries if d.violated]
+    assert retry.repaired is True and config.REPAIR_DISCOVERY is False
+    manifest = json.loads(Path(result.evidence_path).read_text())
+    assert "demo_app/app/payments.py" in manifest["patch"]
+    assert verify_manifest_integrity(manifest)
+    assert manifest["discovery"]["repaired"] == ["retry_same_key"]
+    messages = [e.message for e in list_events(result.run_id)]
+    assert any("PR step disabled" in m for m in messages)

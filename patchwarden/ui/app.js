@@ -41,6 +41,16 @@ async function getJSON(url) {
   return response.json();
 }
 
+// A VERIFIED run is finished when the PR step was disabled or GitHub failed.
+function prOutcome() {
+  for (const event of state.events) {
+    const meta = event.metadata || {};
+    if (meta.pr_step === "disabled") return "disabled";
+    if (meta.failure_code === "GITHUB_ERROR") return "error";
+  }
+  return null;
+}
+
 // ---- Rendering --------------------------------------------------------------
 
 function currentStatus() {
@@ -56,12 +66,16 @@ function renderPipeline(status) {
   if (state.events.length) reached.add("RECEIVED");
   const stopped = status === "FAILED" || status === "UNREPRODUCED";
   const last = PIPELINE.filter((s) => reached.has(s)).pop();
+  const pr = prOutcome();
+  const finished = FINAL.has(status) || state.done || (status === "VERIFIED" && pr !== null && Boolean((state.run || {}).evidence_path));
   $("pipeline").replaceChildren(...PIPELINE.map((stage) => {
     let mark = "todo";
-    if (reached.has(stage)) mark = stage === last && !FINAL.has(status) ? "current" : "done";
+    if (reached.has(stage)) mark = stage === last && !finished ? "current" : "done";
     if (stopped && stage === last) mark = "stopped";
     if (stage === "PR_OPENED" && status === "PR_OPENED") mark = "done";
-    return el("li", { textContent: stage.replace("_", " "), dataset: { state: mark } });
+    const label = stage === "PR_OPENED" && pr === "disabled" && status !== "PR_OPENED" ? "PR off on this host" : stage.replace("_", " ");
+    if (label !== stage.replace("_", " ")) mark = "skipped";
+    return el("li", { textContent: label, dataset: { state: mark } });
   }));
 }
 
@@ -89,8 +103,8 @@ function renderTimeline(events, fresh = 0) {
   }));
 }
 
-function check(label, value) {
-  const [text, tone] = value === true ? ["yes", "ok"] : value === false ? ["no", "bad"] : ["not reached", ""];
+function check(label, value, note) {
+  const [text, tone] = value === true ? ["yes", "ok"] : value === false ? ["no", "bad"] : [note || "not reached", ""];
   return el("div", { className: "check" }, el("span", { textContent: label }),
     el("span", { className: "chip", textContent: text, dataset: tone ? { tone } : {} }));
 }
@@ -105,7 +119,9 @@ function renderEvidence(status) {
     check("Baseline red for the reported error", status === "UNREPRODUCED" ? false : gate("DIAGNOSING")),
     check("Patch verified by the independent verifier", gate("VERIFIED")),
     check("Evidence bundle written", run.evidence_path ? true : failed ? false : null),
-    check("Human-review PR opened", status === "PR_OPENED" && run.pr_url ? true : FINAL.has(status) || (state.done && status === "VERIFIED") ? false : null),
+    prOutcome() === "disabled" && status !== "PR_OPENED"
+      ? check("Human-review PR opened", null, "off on this host")
+      : check("Human-review PR opened", status === "PR_OPENED" && run.pr_url ? true : FINAL.has(status) || (state.done && status === "VERIFIED") || prOutcome() ? false : null),
   ];
   if (status === "PR_OPENED" && run.pr_url) items.push(safeLinkBlock(run.pr_url));
   const evidence = state.evidence;
@@ -117,8 +133,23 @@ function renderEvidence(status) {
       ["model", evidence.model_id],
       ["verified_at", evidence.verified_at],
     ];
-    if (evidence.discovery) kv.push(["scenarios run", evidence.discovery.scenarios_run], ["confirmed", (evidence.discovery.confirmed || []).join(", ") || "none"]);
+    if (evidence.sandbox) kv.push(["sandbox", [evidence.sandbox.backend, evidence.sandbox.sandbox_id].filter(Boolean).join(" ")]);
+    const discovery = evidence.discovery;
+    if (discovery) {
+      const controls = Object.entries(discovery.negative_controls || {}).map(([id, clean]) => `${id}: ${clean ? "clean" : "also failed"}`);
+      kv.push(
+        ["scenarios run", discovery.scenarios_run],
+        ["second defect", (discovery.confirmed || []).join(", ") || "none confirmed"],
+        ["negative control", controls.join(", ") || undefined],
+        ["repaired", (discovery.repaired || []).join(", ") || undefined],
+      );
+    }
     items.push(el("dl", { className: "kv" }, ...kv.filter(([, v]) => v !== undefined && v !== "").flatMap(([k, v]) => [el("dt", { textContent: k }), el("dd", { textContent: String(v) })])));
+    const sources = (evidence.tavily_sources || []).filter((item) => /^https:\/\//.test(item.url || ""));
+    if (sources.length) {
+      items.push(el("p", { className: "evidence-note", textContent: "Tavily sources consulted (untrusted hints):" }));
+      items.push(el("ul", { className: "sources" }, ...sources.map((item) => el("li", {}, safeLink(item.url, item.title || item.url)))));
+    }
     if (state.mode === "live") items.push(el("p", { className: "evidence-note" }, el("a", { href: `/runs/${encodeURIComponent(run.run_id)}/evidence`, target: "_blank", textContent: "Full evidence manifest (JSON)" })));
   }
   for (const event of failures) {
@@ -126,6 +157,18 @@ function renderEvidence(status) {
   }
   items.push(el("p", { className: "evidence-note", textContent: "Passing tests are bounded evidence, not proof. PatchWarden never merges or deploys." }));
   $("evidence").replaceChildren(...items);
+}
+
+function renderPatch() {
+  const diff = state.evidence && state.evidence.patch;
+  $("patch-panel").hidden = !diff;
+  if (!diff) return;
+  const files = (diff.match(/^\+\+\+ b\/(.+)$/gm) || []).map((line) => line.slice(6));
+  $("patch-note").textContent = `Applied by trusted code to a fresh pinned checkout, then verified. Files: ${files.join(", ")}. SHA-256 ${state.evidence.patch_sha256}.`;
+  $("patch").replaceChildren(...diff.replace(/\n+$/, "").split("\n").map((line) => {
+    const kind = line.startsWith("+++") || line.startsWith("---") ? "file" : line.startsWith("@@") ? "hunk" : line.startsWith("+") ? "add" : line.startsWith("-") ? "del" : "";
+    return el("span", { className: kind, textContent: line || " " });
+  }));
 }
 
 function safeLinkBlock(url) {
@@ -143,6 +186,7 @@ function render(fresh = 0) {
   renderPipeline(status);
   renderTimeline(state.events, fresh);
   renderEvidence(status);
+  renderPatch();
   document.title = `${status} · ${run.run_id || "PatchWarden"}`;
 }
 
@@ -163,7 +207,7 @@ async function loadRun(runId) {
       if (run.evidence_path && !state.evidence) state.evidence = await getJSON(`/runs/${id}/evidence`).catch(() => null);
       showError("");
       render(fresh.length);
-      if (FINAL.has(run.status)) return;
+      if (FINAL.has(run.status) || (run.status === "VERIFIED" && run.evidence_path && prOutcome())) return;
       state.timer = setTimeout(poll, run.status === "VERIFIED" ? IDLE_POLL_MS : LIVE_POLL_MS);
     } catch (error) {
       showError(`Could not load run: ${error.message}`);
@@ -207,24 +251,79 @@ function playRecording(recording, speed = 1) {
 
 // ---- Home -------------------------------------------------------------------
 
+async function startLive(caseId, button) {
+  button.disabled = true;
+  button.textContent = "Starting…";
+  try {
+    const response = await fetch("/demo/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ case: caseId }),
+    });
+    const busy = response.headers.get("X-Run-Id");
+    if (response.status === 409 && busy) {
+      location.search = `?run=${encodeURIComponent(busy)}`;
+      return;
+    }
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.detail || `${response.status} ${response.statusText}`);
+    location.search = `?run=${encodeURIComponent(body.run_id)}`;
+  } catch (error) {
+    showError(`Could not start a live run: ${error.message}`);
+    button.disabled = false;
+    button.textContent = "Run live";
+  }
+}
+
+async function loadLive() {
+  let demo;
+  try {
+    demo = await getJSON("/demo");
+  } catch {
+    return; // static hosting without the API: recordings only
+  }
+  $("live-panel").hidden = false;
+  const busy = demo.busy_run;
+  const note = demo.enabled
+    ? `Each run checks out the pinned demo commit in a fresh E2B sandbox and calls the model live (about a minute). One run at a time; ${demo.remaining_today} left today. Pull requests are off for public runs.`
+    : demo.reason;
+  $("live-note").replaceChildren(note, busy ? el("span", {}, " A run is in progress: ", el("a", { href: `?run=${encodeURIComponent(busy)}`, textContent: "watch it" }), ".") : "");
+  $("cases").replaceChildren(...demo.cases.map((item) => {
+    const button = el("button", { type: "button", className: "run-live", textContent: "Run live", disabled: !demo.enabled || Boolean(busy) || demo.remaining_today <= 0 });
+    button.addEventListener("click", () => startLive(item.case, button));
+    return el("li", {},
+      el("span", { className: "case-id", textContent: item.case }),
+      el("div", { className: "case-body" },
+        el("strong", { textContent: item.title }),
+        el("div", { className: "muted small" },
+          el("span", { className: "chip", textContent: item.error_type }), " ",
+          `${item.incident_id} @ ${item.commit_sha.slice(0, 7)}`,
+          item.repair_discovery ? " · second repair on" : ""),
+      ),
+      button,
+    );
+  }));
+}
+
 async function loadHome() {
   $("home").hidden = false;
   $("run").hidden = true;
+  loadLive();
   try {
     const runs = await getJSON("/runs");
     $("recent").replaceChildren(...(runs.length ? runs.map((run) => el("li", {},
       el("a", { href: `?run=${encodeURIComponent(run.run_id)}`, textContent: run.run_id }),
       el("span", { className: "muted", textContent: run.incident_id }),
       el("span", { className: "chip", textContent: run.status, dataset: TONE[run.status] ? { tone: TONE[run.status] } : {} }),
-    )) : [el("li", { className: "muted", textContent: "No runs yet. Send a signed alert to start one." })]));
+    )) : [el("li", { className: "muted", textContent: "No runs on this server yet." })]));
   } catch (error) {
     $("recent").replaceChildren(el("li", { className: "muted", textContent: `API unavailable (${error.message}). Recordings still play.` }));
   }
   try {
     const recordings = await getJSON("recordings/index.json");
     $("recordings").replaceChildren(...recordings.map((r) => el("li", {},
-      el("a", { href: `?replay=${encodeURIComponent(`recordings/${r.file}`)}`, textContent: r.run_id }),
-      el("span", { className: "muted", textContent: r.incident_id }),
+      el("a", { href: `?replay=${encodeURIComponent(`recordings/${r.file}`)}`, textContent: r.label || r.run_id }),
+      el("span", { className: "muted", textContent: r.label ? `${r.run_id} · ${r.incident_id}` : r.incident_id }),
       el("span", { className: "chip", textContent: r.status, dataset: TONE[r.status] ? { tone: TONE[r.status] } : {} }),
     )));
   } catch {

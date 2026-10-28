@@ -8,7 +8,9 @@ own patch with human-written behavioral rules and can find a second bug nobody r
 The model proposes; trusted code decides. No claim in the run log, the evidence file or the PR
 comes from model output.
 
-- **Hosted demo:** https://p01--patchwarden-api--smbsdvp245v8.code.run/ui/ (progress UI and recorded runs; `GET /health`)
+- **Live product:** https://p01--patchwarden-api--smbsdvp245v8.code.run/ui/ Press **Run live** on any of
+  the six alerts and watch a real run: Nemotron on Nebius, an E2B sandbox, the trusted gates, the
+  verified diff and the evidence. Recorded runs replay there too. (`GET /health` shows the configuration.)
 - **Headline run:** signed alert `demo-001` → PR [#8](https://github.com/Satyabratadas/patchwarden-demo/pull/8) (replay it in the UI: `/ui/?replay=recordings/run-376fefbdfc1a.json`)
 - **All generated PRs:** https://github.com/Satyabratadas/patchwarden-demo/pulls
 - **Video (3 min):** _link added at submission_
@@ -108,7 +110,12 @@ python -m patchwarden.scripts.send_demo_alert --fixture demo_app/fixtures/incide
 ```
 
 Offline, with no keys: `python -m patchwarden.scripts.run_incident --local --mock`, or replay a
-recorded run in the UI. Hosted: `docker build -t patchwarden . && docker run -p 8000:8000 --env-file .env patchwarden`.
+recorded run in the UI.
+
+To offer the **Run live** button on your own host, set `PUBLIC_DEMO_RUNS_PER_DAY` (for example
+`20`) with `E2B_API_KEY` set and `OPEN_PR_ON_VERIFIED=false`. Public runs use only the bundled
+alerts, one at a time, never open PRs, and refuse to start without E2B, so model-written code never
+runs on the web server. Hosted: `docker build -t patchwarden . && docker run -p 8000:8000 --env-file .env patchwarden`.
 
 ## Honest limits
 

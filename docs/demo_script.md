@@ -10,7 +10,8 @@ for docs, E2B for the sandbox, GitHub for the PR.
 ## 0:00–0:20 — Signed alert
 
 Show the checkout crash (`demo_app/tests/test_incident.py` is red on the pinned
-baseline). Start the API and send the signed alert:
+baseline). Either press **Run live** on case 01 or 02 on the hosted page, or start
+the API locally and send the signed alert:
 
 ```sh
 make run

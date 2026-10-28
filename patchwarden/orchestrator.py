@@ -81,7 +81,9 @@ def _fail(run_id: str, incident, code: str, message: str, **result) -> RunResult
     return RunResult(run_id=run_id, status=RunStatus.FAILED, incident=incident, **result)
 
 
-def run_incident(incident: IncidentEvidence) -> RunResult:
+def run_incident(incident: IncidentEvidence, repair_discovery: bool | None = None) -> RunResult:
+    """Run the gate sequence. repair_discovery overrides REPAIR_DISCOVERY for this run only."""
+    repair = config.REPAIR_DISCOVERY if repair_discovery is None else repair_discovery
     run_id = create_run(incident)
     existing = get_run(run_id)
     if existing.status != RunStatus.RECEIVED:
@@ -190,9 +192,10 @@ def run_incident(incident: IncidentEvidence) -> RunResult:
             for name, command in outcome.commands.items()
         ]
         if config.RUN_DISCOVERY:
-            result.discoveries = challenge(result, handle, baseline)
+            result.discoveries = challenge(result, handle, baseline, repair)
         manifest = build_manifest(result, baseline["test_hashes"], commands)
         manifest["model_id"] = config.NEBIUS_MODEL_REASONING
+        manifest["patch"] = result.patch.unified_diff  # patch_sha256 is checkable against it
         manifest["incident_id"] = incident.incident_id
         manifest["reproducer_id"] = incident.reproducer_id
         manifest["sandbox"] = handle.describe()
@@ -371,7 +374,7 @@ def _attempt_secondary_repair(
 
 
 def challenge(
-    result: RunResult, handle, baseline: dict | None = None
+    result: RunResult, handle, baseline: dict | None = None, repair: bool | None = None
 ) -> list[DiscoveryResult]:
     """A6 (experimental): challenge the verified patch with trusted catalog scenarios.
 
@@ -461,7 +464,9 @@ def challenge(
             {"scenarios": ids},
             "warning",
         )
-        if config.REPAIR_DISCOVERY and baseline is not None:
+        if repair is None:
+            repair = config.REPAIR_DISCOVERY
+        if repair and baseline is not None:
             _attempt_secondary_repair(result, handle, baseline, confirmed)
         else:
             advance(
@@ -584,7 +589,12 @@ def maybe_create_pr(
     ):
         return result
     if not config.OPEN_PR_ON_VERIFIED:
-        emit(result.run_id, "VERIFIED", "PR step disabled by OPEN_PR_ON_VERIFIED")
+        emit(
+            result.run_id,
+            "VERIFIED",
+            "PR step disabled on this host (OPEN_PR_ON_VERIFIED=false)",
+            {"pr_step": "disabled"},
+        )
         return result
 
     incident_id = result.incident.incident_id

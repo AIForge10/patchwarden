@@ -9,6 +9,8 @@ WORKDIR /app
 
 COPY pyproject.toml README.md requirements-dev.txt ./
 COPY patchwarden ./patchwarden
+# Bundled alerts for the public "run live" demo (read-only data, never executed).
+COPY demo_app/fixtures ./demo_app/fixtures
 
 RUN pip install --no-cache-dir -r requirements-dev.txt \
     && pip install --no-cache-dir -e . --no-deps \
