@@ -1,4 +1,4 @@
-# AGENTS.md
+# Project instructions for AI coding agents
 
 ## Git Commit and Attribution Rules
 

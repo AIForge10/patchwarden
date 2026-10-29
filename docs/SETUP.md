@@ -1,7 +1,6 @@
 # Setup guide
 
 Follow these steps once on a new machine. You need git and conda (Miniconda or Anaconda).
-The full spec is the project implementation plan PDF (Oct 10–30, 2026).
 
 ## 1. Get the code
 
@@ -31,8 +30,11 @@ package itself in editable mode (`pip install -e . --no-deps`), so `import patch
 Open `.env` and fill in your own keys. Never commit this file and never paste keys in chat, issues or pull requests.
 `WEBHOOK_SECRET` and `ALLOWED_REPO_URL` are enough to start the API and replay recordings. A live repair also needs
 `NEBIUS_API_KEY` (model), `E2B_API_KEY` (sandbox; without it code runs in a local temp directory), optionally
-`TAVILY_API_KEY` (web hints), and `GITHUB_TOKEN` to open the pull request. On a public host, keep
-`OPEN_PR_ON_VERIFIED=false`; set `PUBLIC_DEMO_RUNS_PER_DAY` above 0 to show the "Run live" button.
+`TAVILY_API_KEY` (web hints), and `GITHUB_TOKEN` to open the pull request. On a public host, set
+`PUBLIC_DEMO_RUNS_PER_DAY` above 0 to show the "Run live" button. Public runs open PRs only with
+`PUBLIC_DEMO_OPEN_PRS=true`, `OPEN_PR_ON_VERIFIED=true` and a token scoped to the demo repository;
+otherwise keep `OPEN_PR_ON_VERIFIED=false`. `NEBIUS_PATCH_MODELS` turns on the Nano → Super → Ultra
+patch ladder.
 
 ## 5. Check that it works
 
@@ -62,7 +64,7 @@ A = Satyabrata (agent / verifier / orchestrator), B = Atina (demo app / trusted 
 |------|-------|------------|
 | `patchwarden/models.py` | Both | Frozen interfaces (day one) |
 | `patchwarden/config.py` | A | A2 validated Settings |
-| `patchwarden/agent/nebius.py`, `prompts.py`, `context.py`, `patcher.py`, `patchwarden/orchestrator.py` | A | A2, A5 |
+| `patchwarden/agent/nebius_client.py`, `prompts.py`, `context.py`, `patcher.py`, `reproducer.py`, `patchwarden/orchestrator.py` | A | A2, A5 |
 | `patchwarden/sandbox/` | A | A3 |
 | `patchwarden/verifier/` | A | A4 |
 | `patchwarden/discovery/` (except `catalog.py`) | A | A6 |
