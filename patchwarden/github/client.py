@@ -1,4 +1,4 @@
-"""Minimal GitHub publisher; never merges or deploys a change. Owner: Satyabrata."""
+"""Minimal GitHub publisher; never merges or deploys a change."""
 
 from __future__ import annotations
 

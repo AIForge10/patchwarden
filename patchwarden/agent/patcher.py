@@ -113,7 +113,7 @@ def _no_step(status, message, metadata=None):
 def repair_until_verified(
     incident, sandbox, baseline: dict, diagnosis: str = "", max_attempts: int = 0, step=_no_step
 ) -> tuple[PatchCandidate | None, VerifyOutcome | None]:
-    """A5: propose -> verify, at most max_attempts times, each from a clean pinned checkout.
+    """Propose -> verify, at most max_attempts times, each from a clean pinned checkout.
 
     Returns the first VERIFIED candidate, or (None, last outcome). There is no silent
     success: only run_verification can produce VERIFIED. `step(status, message, metadata)`

@@ -1,4 +1,4 @@
-"""Build docs/evaluation.csv from executed runs only: evidence files plus the event log.
+"""Build an evaluation CSV from executed runs only: evidence files plus the event log.
 
     python -m patchwarden.scripts.build_evaluation docs/evaluation/cases.json
 
@@ -92,11 +92,11 @@ def row_for(case: dict, out_dir: Path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("cases", type=Path)
-    parser.add_argument("--csv", type=Path, default=Path("docs/evaluation.csv"))
+    parser.add_argument("--csv", type=Path, help="default: the cases file with .csv")
     args = parser.parse_args()
     cases = json.loads(args.cases.read_text())["cases"]
     rows = [row_for(case, args.cases.parent / "evidence") for case in cases]
-    with args.csv.open("w", newline="") as handle:
+    with (args.csv or args.cases.with_suffix(".csv")).open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=COLUMNS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)

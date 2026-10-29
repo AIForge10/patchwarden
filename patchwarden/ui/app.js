@@ -1,4 +1,4 @@
-// PatchWarden progress page. Owner: Satyabrata.
+// PatchWarden progress page.
 // Live:   /ui/?run=<run_id>                    polls the API's append-only event log
 // Replay: /ui/?replay=recordings/<file>.json   plays a recorded run (patchwarden.scripts.record_run)
 // Every status shown here comes from the run state or event log; nothing is inferred as green.

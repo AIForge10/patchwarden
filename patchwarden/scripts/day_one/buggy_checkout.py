@@ -1,4 +1,4 @@
-"""A tiny throwaway buggy file for the day-one test (not the real demo app)."""
+"""A tiny throwaway buggy file for the first harness test (not the real demo app)."""
 
 
 def parse_payment_response(response):

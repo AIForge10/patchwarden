@@ -1,7 +1,7 @@
 # Evaluation
 
-Six controlled cases from plan section 12, run live on October 28, 2026. Every number below
-comes from an executed run: `make evaluation` rebuilds [`evaluation.csv`](evaluation.csv) from
+Six controlled cases, run live on October 28, 2026. Every number below
+comes from an executed run: `make evaluation` rebuilds [`evaluation/cases.csv`](evaluation/cases.csv) from
 the run event log and the evidence manifests listed in [`evaluation/cases.json`](evaluation/cases.json).
 Copies of those manifests are in [`evaluation/evidence/`](evaluation/evidence/); `evidence_hash`
 is the SHA-256 of each file, so anyone can check them.
@@ -42,7 +42,7 @@ On October 29 the six cases were run again with only `NEBIUS_MODEL_REASONING` ch
 `nvidia/Nemotron-3-Ultra-550b-a55b` and once on `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`
 (no PRs; same seeded and known-good commits, same E2B, Tavily and gates), and once more with
 the patch-model ladder. Super stays the default.
-[`evaluation_models.csv`](evaluation_models.csv) is built the same way from
+[`evaluation/models.csv`](evaluation/models.csv) is built the same way from
 [`evaluation/models.json`](evaluation/models.json) and includes the Super rows above.
 
 | Model | Verified | Attempts | Hidden double charge (seeded, 5 cases) | Repaired (case 02) | Known-good control | False positives |
@@ -85,7 +85,7 @@ attached, only the alert text, stack trace and sanitized request. Nemotron 3 Sup
 and accepts it only if pytest reports the reported error type at the exact `file:line` of the
 alert's deepest repository frame (`main.py:14`, `store.py:20`, `payments.py:12`). The accepted test
 is hashed with the protected tests and its source is in the evidence manifest. Each alert ran
-twice, live, cache off, no PRs; rows in [`evaluation_written_reproducers.csv`](evaluation_written_reproducers.csv)
+twice, live, cache off, no PRs; rows in [`evaluation/written_reproducers.csv`](evaluation/written_reproducers.csv)
 from [`evaluation/written_reproducers.json`](evaluation/written_reproducers.json).
 
 | Alert | Crash line the test had to hit | Test accepted | Verified | Hidden double charge |

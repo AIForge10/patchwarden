@@ -1,4 +1,4 @@
-# Checkout demo target app (Atina, B1). Runs its own pytest suite, separate from the agent's tests.
+# Checkout demo target app. Runs its own pytest suite, separate from the agent's tests.
 [project]
 name = "checkout-demo"
 version = "0.1.0"

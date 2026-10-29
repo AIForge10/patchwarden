@@ -1,4 +1,4 @@
-"""Prompts for diagnosis, patch generation and failure analysis. Owner: Satyabrata."""
+"""Prompts for diagnosis, patch generation and failure analysis."""
 
 import json
 

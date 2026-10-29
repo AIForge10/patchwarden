@@ -1,4 +1,4 @@
-"""Model-chosen challenge scenarios, constrained to the trusted catalog. Owner: Satyabrata."""
+"""Model-chosen challenge scenarios, constrained to the trusted catalog."""
 
 import json
 

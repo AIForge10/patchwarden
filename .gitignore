@@ -46,3 +46,6 @@ evidence/
 # evaluation evidence copies are published so evidence_hash can be checked
 !docs/evaluation/evidence/
 sandbox_output/
+
+# Local AI-assistant settings (kept on each machine, not part of the project)
+.claude/

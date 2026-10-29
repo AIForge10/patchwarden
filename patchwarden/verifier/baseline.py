@@ -1,4 +1,4 @@
-"""Before-patch evidence: the reproducer must fail for the reported reason. Owner: Satyabrata."""
+"""Before-patch evidence: the reproducer must fail for the reported reason."""
 
 import hashlib
 import re

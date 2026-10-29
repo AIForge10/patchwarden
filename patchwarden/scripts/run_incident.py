@@ -84,7 +84,7 @@ def main() -> None:
     parser.add_argument(
         "--repair-discovery",
         action="store_true",
-        help="also try to repair a confirmed second defect (plan P2)",
+        help="also try to repair a confirmed second defect",
     )
     parser.add_argument("--no-pr", action="store_true", help="never open a pull request")
     args = parser.parse_args()
