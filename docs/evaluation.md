@@ -36,6 +36,39 @@ commit and repaired in 1/1 run that allowed it. 0 confirmed discoveries on the k
 variant, and 0 false positives across all 8 runs (22 scenarios, each executed twice, with a
 negative control for every repeated violation). Runs took 26–66 s end to end.
 
+## Same six cases on other Nemotron models
+
+On October 29 the six cases were run again with only `NEBIUS_MODEL_REASONING` changed, once on
+`nvidia/Nemotron-3-Ultra-550b-a55b` and once on `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`
+(no PRs; same seeded and known-good commits, same E2B, Tavily and gates). Super stays the
+default. [`evaluation_models.csv`](evaluation_models.csv) is built the same way from
+[`evaluation/models.json`](evaluation/models.json) and includes the Super rows above.
+
+| Model | Verified | Attempts | Hidden double charge (seeded, 5 cases) | Repaired (case 02) | Known-good control | False positives |
+|---|---|---|---|---|---|---|
+| Nemotron 3 Super (120B) | 6/6 | all 1 | 5/5 | yes | none claimed | 0 |
+| Nemotron 3 Ultra (550B) | 6/6 | all 1 | 4/5 | yes | none claimed | 0 |
+| Nemotron 3 Nano (30B) | 6/6 | 1 or 2 | 4/5 | no (not found) | none claimed | 0 |
+
+- **Every model got every incident verified.** The gates do not depend on which model writes the
+  patch: the trusted reproducer, suite and hash checks decide.
+- **Nano used the retry loop.** In cases 01 and 04 its first patch failed verification; the
+  failure was fed back and its second patch verified. This is the first live use of the retry
+  path (Super and Ultra never needed it).
+- **Missed discoveries were safe misses.** Ultra's scenario reply for case 03 contained no
+  usable catalog entry, so no scenario ran. Nano's case 02 proposals paired each scenario with
+  an invariant the catalog does not approve for it; catalog validation rejected all three, so
+  nothing ran and nothing was claimed. In both runs the verified incident fix still stood.
+- **No false positives on any model.** On the known-good commit, all three models ran
+  `retry_same_key` and the invariant held.
+- Timings are not comparable across days: the Super runs also opened PRs.
+
+Replay cache: cases 02 and 06 send the same prompts as case 01 (same alert text and reproducer,
+and the known-good commit differs only in `payments.py`), so the first Ultra and Nano runs of
+those two cases could have reused case 01's cached replies. They were discarded and rerun with
+`NEBIUS_NO_CACHE=1`; the table uses only the rerun results. Cases 01, 03, 04 and 05 were the first request
+of their prompts for each model.
+
 ## What each case measures
 
 - **01** The reported incident: red to green, original suite still green. Discovery runs with the
@@ -57,7 +90,8 @@ that its traceback names no source file.
 
 - **Every primary fix verified on the first attempt.** With the observed failure and the right
   source files, Super did not need verifier feedback on these small, single-cause bugs. The
-  retry path is covered by tests (`tests/test_orchestrator.py`) but was not exercised live.
+  retry path is covered by tests (`tests/test_orchestrator.py`); live, only Nano used it (see
+  the model comparison above).
 - **Case 03's fix is narrow.** The model special-cased the new `"review"` status
   (`if result.status == "review": ...`) instead of fixing the root cause
   (`if result.status != "approved"`). Every gate passed because the tests accept it. This is
@@ -88,4 +122,9 @@ for n in 01 03 04 05 06; do make incident FIXTURE=demo_app/fixtures/incident_$n.
 python -m patchwarden.scripts.run_incident --fixture demo_app/fixtures/incident_02.json --repair-discovery
 # put the new run IDs in docs/evaluation/cases.json, then:
 make evaluation
+
+# another model, no PRs (repeat for each fixture; add --repair-discovery for case 02):
+NEBIUS_MODEL_REASONING=nvidia/Nemotron-3-Ultra-550b-a55b \
+  python -m patchwarden.scripts.run_incident --fixture demo_app/fixtures/incident_01.json --no-pr
+# put the run IDs in docs/evaluation/models.json, then make evaluation
 ```

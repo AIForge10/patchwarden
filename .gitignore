@@ -43,4 +43,6 @@ tmp/
 *.db
 *.sqlite3
 evidence/
+# evaluation evidence copies are published so evidence_hash can be checked
+!docs/evaluation/evidence/
 sandbox_output/

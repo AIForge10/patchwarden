@@ -63,6 +63,22 @@ Running notes from building PatchWarden. Facts only: what we ran and what happen
   blocked GitHub, Nebius and the open internet from inside the sandbox, which let us run
   model-written code with no route to any key.
 
+## Oct 29: same six cases on Ultra and Nano
+
+- Swapping models was one environment variable (`NEBIUS_MODEL_REASONING`); the OpenAI-compatible
+  API, prompts and parsing worked unchanged for `nvidia/Nemotron-3-Ultra-550b-a55b` and
+  `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`.
+- Both verified all six incidents. Ultra fixed every one on attempt 1; Nano needed a second
+  attempt in two cases and fixed them after seeing the verifier's failure. Full table in
+  `docs/evaluation.md`.
+- Ultra no longer put long visible reasoning in the reply (compare Oct 11): a probe reply ended
+  with `finish_reason: stop` in 76 tokens, and every Ultra patch reply in the six runs was usable
+  on the first attempt with no harness change.
+- Structured output was the main gap between sizes: Nano once paired each challenge scenario with
+  an invariant the catalog does not allow, and Ultra once returned no usable scenario list. Our
+  validator rejected both safely. A JSON-schema or constrained-output option on Token Factory
+  would make this reliable for agent loops.
+
 ### Suggestions for Token Factory
 
 - An explicit way to switch visible reasoning off (or return it in a separate field) on Ultra would

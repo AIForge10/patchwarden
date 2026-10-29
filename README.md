@@ -82,6 +82,10 @@ charge: it chose the scenario that exposes it on its own, and trusted code confi
 checked it against a known-good control. One verified fix (case 03) is correct but narrower than
 a human would write, which is why every change goes to a reviewer.
 
+**Same cases on other Nemotron models.** With only the model ID changed, Nemotron 3 Ultra and
+Nemotron 3 Nano also verified 6/6 incidents with 0 false positives; Nano needed the verifier's
+feedback loop twice. Super stays the default. See the comparison in [`docs/evaluation.md`](docs/evaluation.md#same-six-cases-on-other-nemotron-models).
+
 ## Run it
 
 Requires Python 3.11 and conda. Step-by-step setup: [`docs/SETUP.md`](docs/SETUP.md).

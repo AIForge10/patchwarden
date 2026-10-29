@@ -37,8 +37,9 @@ probe:              ## Nebius model probe (A1)
 incident:           ## one incident end to end (real model; opens a PR if OPEN_PR_ON_VERIFIED + GitHub set)
 	python -m patchwarden.scripts.run_incident --fixture $(or $(FIXTURE),demo_app/fixtures/incident_01.json)
 
-evaluation:         ## rebuild docs/evaluation.csv from the runs listed in docs/evaluation/cases.json
+evaluation:         ## rebuild docs/evaluation.csv and docs/evaluation_models.csv from the listed runs
 	python -m patchwarden.scripts.build_evaluation docs/evaluation/cases.json
+	python -m patchwarden.scripts.build_evaluation docs/evaluation/models.json --csv docs/evaluation_models.csv
 
 record:             ## export a run for UI replay: make record RUN=run-...
 	python -m patchwarden.scripts.record_run $(RUN)
