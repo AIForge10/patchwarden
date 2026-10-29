@@ -2,8 +2,10 @@
 
 A visitor picks a case number; nothing else they send is used. The alert comes from the
 bundled fixture, the run goes through the same gates as a signed alert, and it is held to:
-one public run at a time, PUBLIC_DEMO_RUNS_PER_DAY per UTC day (0 turns this off), an E2B
-sandbox (repository code never runs inside this server), and no pull requests.
+one public run at a time, PUBLIC_DEMO_RUNS_PER_DAY per UTC day (0 turns this off), and an E2B
+sandbox (repository code never runs inside this server). Pull requests stay off unless the
+host opts in with PUBLIC_DEMO_OPEN_PRS; then a verified run opens a human-review PR on the
+configured demo repository, exactly as a signed alert would.
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ CASES = {
     "04": ("incident_04.json", False, "Unknown SKU crashes checkout"),
     "05": ("incident_05.json", False, "Gateway timeout crashes checkout"),
     "06": ("incident_06.json", False, "Negative control: same crash, hidden defect absent"),
+    "07": ("incident_07.json", False, "No reproducer attached: the agent writes the failing test"),
 }
 
 _lock = threading.Lock()
@@ -47,8 +50,13 @@ def _unavailable(settings) -> str | None:
         return "Live runs are turned off on this host. Recorded runs still play below."
     if not all((FIXTURES / name).is_file() for name, _, _ in CASES.values()):
         return "The bundled demo alerts are missing from this deployment."
-    if settings.OPEN_PR_ON_VERIFIED:
-        return "Live runs need OPEN_PR_ON_VERIFIED=false so visitors never open pull requests."
+    if settings.OPEN_PR_ON_VERIFIED and not settings.PUBLIC_DEMO_OPEN_PRS:
+        return (
+            "Live runs need OPEN_PR_ON_VERIFIED=false, or PUBLIC_DEMO_OPEN_PRS=true to let "
+            "visitors open pull requests."
+        )
+    if settings.OPEN_PR_ON_VERIFIED and not _github_configured(settings):
+        return "Public pull requests are on, but GitHub is not configured on this host."
     if not (settings.NEBIUS_API_KEY and settings.NEBIUS_MODEL_REASONING):
         return "The model is not configured on this host."
     try:
@@ -59,6 +67,10 @@ def _unavailable(settings) -> str | None:
     return None
 
 
+def _github_configured(settings) -> bool:
+    return bool(settings.GITHUB_TOKEN and settings.GITHUB_OWNER and settings.GITHUB_TARGET_REPO)
+
+
 def _remaining(settings) -> int:
     used = _state["used"] if _state["day"] == _today() else 0
     return max(0, settings.PUBLIC_DEMO_RUNS_PER_DAY - used)
@@ -66,11 +78,18 @@ def _remaining(settings) -> int:
 
 def demo_status(settings) -> dict:
     reason = _unavailable(settings)
+    opens_prs = reason is None and bool(settings.OPEN_PR_ON_VERIFIED)
     return {
         "enabled": reason is None,
         "reason": reason,
         "busy_run": _state["active"],
         "remaining_today": _remaining(settings) if reason is None else 0,
+        "opens_prs": opens_prs,
+        "pr_repo": (
+            f"https://github.com/{settings.GITHUB_OWNER}/{settings.GITHUB_TARGET_REPO}"
+            if opens_prs
+            else None
+        ),
     }
 
 

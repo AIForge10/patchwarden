@@ -5,6 +5,7 @@ cannot prove its result, the run stops with a failure code instead of claiming s
 """
 
 import json
+from functools import partial
 
 import openai
 
@@ -12,6 +13,7 @@ from patchwarden import config
 from patchwarden.agent.context import make_unified_diff, paths_from_traceback, read_context
 from patchwarden.agent.nebius_client import ModelUnavailable
 from patchwarden.agent.patcher import diagnose, propose_patch, repair_until_verified
+from patchwarden.agent.reproducer import write_reproducer
 from patchwarden.agent.research import build_search_query, format_sources, search_error
 from patchwarden.discovery.catalog import load_invariants
 from patchwarden.discovery.recheck import confirm_violation, run_negative_control
@@ -26,6 +28,7 @@ from patchwarden.models import (
     RunStatus,
 )
 from patchwarden.reporting.postmortem import render_pr_body
+from patchwarden.sandbox.commands import REPRODUCER_TESTS, SYNTHESIZED_REPRODUCER
 from patchwarden.sandbox.e2b_runner import create_sandbox, destroy_sandbox
 from patchwarden.sandbox.repository import (
     apply_unified_diff,
@@ -34,7 +37,7 @@ from patchwarden.sandbox.repository import (
 )
 from patchwarden.security import assert_allowed_repo
 from patchwarden.store import create_run, get_run, set_run_status
-from patchwarden.verifier.baseline import capture_baseline, failure_output
+from patchwarden.verifier.baseline import capture_baseline, failure_output, pytest_summary
 from patchwarden.verifier.evidence import build_manifest, write_evidence_bundle
 from patchwarden.verifier.patch_policy import assert_safe_patch, parse_changed_paths
 from patchwarden.verifier.verify import verify_discovery_fix
@@ -97,8 +100,24 @@ def run_incident(incident: IncidentEvidence, repair_discovery: bool | None = Non
     try:
         advance(run_id, RunStatus.BASELINING, "Checking out the pinned commit in a fresh sandbox")
         handle = create_sandbox(run_id)
-        emit(run_id, "BASELINING", f"Sandbox ready: {handle.backend}", handle.describe())
+        sandbox = handle.describe()
+        where = ""
+        if sandbox.get("sandbox_id"):
+            allowed = ", ".join(sandbox.get("egress_allowlist", [])) or "none"
+            where = f" (sandbox {sandbox['sandbox_id']}; network allowed only to {allowed})"
+        emit(run_id, "BASELINING", f"Sandbox ready: {handle.backend}{where}", sandbox)
         checkout_pinned_repo(handle, incident.repo_url, incident.commit_sha)
+        written = None  # the model-written reproducer, when the alert ships none
+        if incident.reproducer_id == SYNTHESIZED_REPRODUCER:
+            written = write_reproducer(incident, handle, step=partial(_step, run_id))
+            if written is None:
+                advance(
+                    run_id,
+                    RunStatus.UNREPRODUCED,
+                    "No model-written reproducer matched the alert; nothing verified to repair",
+                    severity="warning",
+                )
+                return RunResult(run_id=run_id, status=RunStatus.UNREPRODUCED, incident=incident)
         try:
             baseline = capture_baseline(handle, incident)
         except ValueError as error:
@@ -131,8 +150,14 @@ def run_incident(incident: IncidentEvidence, repair_discovery: bool | None = Non
             message = "Original suite is already red at the pinned commit; cannot judge regressions"
             return _fail(run_id, incident, "VERIFY_FAILED", message)
 
+        # pytest's own tallies from the sandbox, so the timeline shows the tests really ran.
+        red = pytest_summary(baseline["reproducer"]["stdout"]) or "failed"
+        green = pytest_summary(baseline["original_suite"]["stdout"]) or "passed"
         advance(
-            run_id, RunStatus.DIAGNOSING, f"Baseline red with {incident.error_type}; suite green"
+            run_id,
+            RunStatus.DIAGNOSING,
+            f"Baseline red with {incident.error_type} (reproducer: {red}); suite green ({green})",
+            {"reproducer": red, "original_suite": green},
         )
         failure = failure_output(baseline)
         repo = handle.root / "repo"
@@ -172,10 +197,13 @@ def run_incident(incident: IncidentEvidence, repair_discovery: bool | None = Non
                 run_id, incident, code, message, verification=outcome.result if outcome else None
             )
 
+        fixed = pytest_summary(outcome.commands["reproducer"].stdout) or "passed"
+        suite = pytest_summary(outcome.commands["suite"].stdout) or "passed"
         advance(
             run_id,
             RunStatus.VERIFIED,
-            "Reproducer green, original suite green, protected files unchanged",
+            f"Reproducer green ({fixed}), original suite green ({suite}), "
+            "protected files unchanged",
             {"attempt": patch.attempt},
         )
         result = RunResult(
@@ -200,6 +228,14 @@ def run_incident(incident: IncidentEvidence, repair_discovery: bool | None = Non
         manifest["patch_models"] = [config.patch_model(n) for n in range(1, patch.attempt + 1)]
         manifest["patch"] = result.patch.unified_diff  # patch_sha256 is checkable against it
         manifest["incident_id"] = incident.incident_id
+        if written is not None:
+            test_path = REPRODUCER_TESTS[SYNTHESIZED_REPRODUCER]
+            manifest["reproducer"] = {
+                "written_by": config.NEBIUS_MODEL_REASONING,
+                "path": test_path,
+                "sha256": baseline["test_hashes"][test_path],
+                "source": written,
+            }
         manifest["reproducer_id"] = incident.reproducer_id
         manifest["sandbox"] = handle.describe()
         if sources:
@@ -223,6 +259,10 @@ def run_incident(incident: IncidentEvidence, repair_discovery: bool | None = Non
         # Read the verified files now: the sandbox (still patched) is destroyed below.
         active_patch = result.patch or patch
         files = {path: (repo / path).read_text() for path in active_patch.touched_paths}
+        if written is not None:
+            files[REPRODUCER_TESTS[SYNTHESIZED_REPRODUCER]] = (
+                written  # ships as the regression test
+            )
         return maybe_create_pr(result, files, manifest)
     except (ModelUnavailable, openai.OpenAIError) as error:
         return _fail(run_id, incident, "MODEL_UNAVAILABLE", f"{type(error).__name__}: {error}")
@@ -536,6 +576,19 @@ def _tavily_section(manifest: dict) -> str:
 
 
 def _reproducer_section(result: RunResult, manifest: dict) -> str:
+    written = manifest.get("reproducer")
+    origin = (
+        f"No reproducer shipped with the alert. `{written['written_by']}` wrote "
+        f"`{written['path']}` from the stack trace; trusted code accepted it only because it "
+        "failed with the reported error at the line the alert names. This PR adds it as the "
+        "regression test.\n\n"
+        if written
+        else ""
+    )
+    return origin + _reproducer_command(manifest)
+
+
+def _reproducer_command(manifest: dict) -> str:
     commands = manifest.get("commands") or []
     reproducer = next(
         (item for item in commands if item.get("step") == "baseline_reproducer"), None

@@ -1,71 +1,84 @@
 # Three-minute demo storyboard
 
-Disclosure, spoken once: this controlled checkout app contains seeded defects.
-PatchWarden receives the first incident. The second defect is not in the agent
-prompt. Every claim is checked against prewritten tests and invariants.
+One continuous live run is the spine of the video: hosted **Run live** on **case 07** (no
+reproducer attached). It shows every step, from a stack trace to a real PR, in about a minute.
+Record that run once, then cut to the replays below only for the two moments a single run may
+not hit (a verifier rejection and model escalation).
 
-Name the stack on screen once: Nemotron 3 Super on Nebius Token Factory, Tavily
-for docs, E2B for the sandbox, GitHub for the PR.
+Disclosure, spoken once: this controlled checkout app contains seeded defects. The second defect
+is not in any alert, test or prompt. Every claim is checked by trusted code, never by the model.
 
-## 0:00–0:20 — Signed alert
+Name the stack on screen once: NVIDIA Nemotron 3 (Nano, Super, Ultra) on Nebius Token Factory,
+Tavily for docs, E2B for the sandbox, GitHub for the PR.
 
-Show the checkout crash (`demo_app/tests/test_incident.py` is red on the pinned
-baseline). Either press **Run live** on case 01 or 02 on the hosted page, or start
-the API locally and send the signed alert:
+## Before recording
+
+- Hosted env (Northflank) has `PUBLIC_DEMO_OPEN_PRS=true`, `OPEN_PR_ON_VERIFIED=true`, the GitHub
+  token, and `NEBIUS_PATCH_MODELS` (Nano, Super, Ultra). `/health` shows them.
+- Open three tabs: the hosted UI, the E2B dashboard (Sandboxes list), and
+  https://github.com/Satyabratadas/patchwarden-demo/pulls.
+
+## 0:00–0:15 — The problem
+
+"At 3 a.m. an AI agent can write a fix in seconds, but nobody can trust it: it may fix the
+symptom, break something else, or quietly edit the test. PatchWarden ships a fix only after it
+proves it."
+
+## 0:15–0:40 — Alert in, sandbox up, the agent writes the failing test
+
+Press **Run live** on 07. Point out:
+- "Sandbox ready: e2b". Switch to the E2B dashboard: the same sandbox ID is running right now.
+  Its network reaches only PyPI.
+- "No reproducer shipped with the alert: Nemotron is writing one from the stack trace", then
+  "Model-written reproducer accepted: fails with ValidationError at demo_app/app/main.py:14, the
+  line the alert names (1 failed in 0.2s)". Say: "the model wrote the test, but trusted code
+  accepted it only because it crashed at the exact line production reported."
+- The **Reproducer written by the model** panel shows the test.
+
+## 0:40–1:15 — Diagnose, patch, verify
+
+- "Baseline red … (reproducer: 1 failed); suite green (3 passed)": real pytest output from E2B.
+- Tavily sources consulted, then the Nemotron diagnosis citing `main.py:14`.
+- "Attempt 1 of 3: requesting a patch from Nemotron Nano". If the verifier rejects it, the next
+  line says why and "escalating to Super". If not, cut to the ladder replay
+  (`?replay=recordings/run-6f018665190c.json`) for 5 seconds: "a rejected patch is the only thing
+  that moves the run to a bigger model."
+- "Reproducer green (1 passed), original suite green (3 passed), protected files unchanged". Show
+  the **Verified patch** diff.
+
+## 1:15–1:55 — The wow: a bug nobody reported
+
+CHALLENGING. The model may only pick catalog scenarios. It picks `retry_same_key`. Trusted code
+runs it twice (two charges for one idempotency key), then swaps in the known-good gateway where it
+holds: **"Confirmed a second defect: retry_same_key"**. Say: "no alert, test or prompt mentioned
+this double charge. It found it, and a negative control stopped it from crying wolf."
+
+## 1:55–2:30 — The real PR
+
+The run ends with "Opened human-review PR …". Click it. On GitHub show: the fix and the new
+regression test in **Files changed**, the reproduced failing test section, the confirmed second
+defect, residual risks, Tavily sources, and the evidence manifest. "It never merges; a human
+reviews."
+
+## 2:30–3:00 — Results and limits
+
+Show the tables in `docs/evaluation.md`: six cases plus three stack-trace-only alerts, three
+Nemotron models and the ladder, every number rebuilt from evidence files, 0 false positives.
+Limits in one breath: seeded demo app, logic bugs still need a shipped test, passing tests are
+evidence not proof, never merges.
+
+## Fallbacks
+
+If a live run is slow or a service is down, use the recorded runs (real model, real E2B):
+
+- `?replay=recordings/run-376fefbdfc1a.json`: headline signed alert to PR #8
+- `?replay=recordings/run-4e9997e40534.json`: no reproducer attached; Nemotron writes the test
+- `?replay=recordings/run-6f018665190c.json`: verifier rejects Nano's patch, escalates to Super
+
+Locally, the signed-webhook path with PRs on:
 
 ```sh
 make run
-python -m patchwarden.scripts.send_demo_alert --fixture demo_app/fixtures/incident_01.json
+python -m patchwarden.scripts.send_demo_alert --fixture demo_app/fixtures/incident_07.json
+# open http://127.0.0.1:8000/ui/?run=<run_id>
 ```
-
-Open `/ui/?run=<run_id>`. Takeaway: a real signed trigger, not a manual prompt.
-
-## 0:20–0:55 — Red baseline, then diagnosis
-
-The timeline reaches BASELINING ("Sandbox ready: e2b") then DIAGNOSING. The
-reproducer failed for the reported error inside the E2B sandbox, whose network
-reaches only PyPI; the original suite stayed green. Diagnosis cites file/line
-evidence from the observed output, not the alert's own traceback, plus the
-Tavily sources it consulted.
-
-## 0:55–1:35 — Patch and independent verifier
-
-PATCHING → VERIFYING. The model never grades its own work: a fresh pinned
-checkout, the patch applied by trusted code, then reproducer green, suite green,
-protected hashes unchanged. If an attempt regresses, that verifier output is the
-next attempt's feedback (max three).
-
-## 1:35–2:15 — Scenario challenge (experimental)
-
-CHALLENGING. The model may only pick catalog IDs and bounded parameters. It was
-never told about a second bug, yet it picks `retry_same_key`. Trusted code runs
-the scenario twice (2 charges for one idempotency key, both times), then swaps in
-the known-good control gateway, where it holds (1 charge). Only then is it
-CONFIRMED_DISCOVERY. In the headline run the defect is reported as
-**unresolved**; mention that case 02 (`--repair-discovery`) also repaired and
-re-verified it (PR #3 on the demo repo).
-
-## 2:15–2:40 — Evidence and human-review PR
-
-Evidence JSON plus a GitHub PR on the pinned SHA. No merge, no deploy. The PR
-body includes residual risks and Tavily sources actually consulted (or none).
-
-## 2:40–3:00 — Results and limits
-
-Point at `docs/evaluation.md`: six cases, one executed run each, every number
-rebuilt from the evidence files. Then the limits: seeded demo, reproducers ship
-with the repo, bounded tests, no production claims, never merges.
-
-## Offline fallback
-
-If the live model or GitHub is unavailable, replay the recorded headline run
-(a real live run: real model, real E2B sandbox, real PR). It is also on the
-hosted demo.
-
-```sh
-make run
-# then open http://127.0.0.1:8000/ui/?replay=recordings/run-376fefbdfc1a.json
-# (signed alert demo-001 -> PR #8 on the demo repo; also on the hosted demo)
-```
-
-Or `make record RUN=<run_id>` after any finished local run.

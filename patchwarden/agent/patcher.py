@@ -153,5 +153,7 @@ def repair_until_verified(
         if outcome.result.status == "VERIFIED":
             return candidate, outcome
         feedback = outcome.reason
-        step(RunStatus.VERIFYING, f"Attempt {attempt}: {outcome.result.status}", info)
+        why = outcome.reason.splitlines()[0].rstrip(":") if outcome.reason else ""
+        message = f"Attempt {attempt}: {outcome.result.status}" + (f": {why}" if why else "")
+        step(RunStatus.VERIFYING, message, info)
     return None, outcome

@@ -1,0 +1,17 @@
+{
+  "incident_id": "demo-009",
+  "repo_url": "https://github.com/Satyabratadas/patchwarden-demo",
+  "commit_sha": "1e83628cf0f20310c9da2a3454440a27be1a9daa",
+  "error_type": "TimeoutError",
+  "message": "Gateway timed out during charge (no reproducer attached)",
+  "traceback": "Traceback (most recent call last):\n  File \"demo_app/app/main.py\", line 13, in checkout\n    response = charge(request.amount, request.idempotency_key, request.provider_mode)\n  File \"demo_app/app/payments.py\", line 12, in charge\n    raise TimeoutError(\"gateway timed out\")\nTimeoutError: gateway timed out",
+  "reproducer_id": "synthesize",
+  "sanitized_request": {
+    "order_id": "order-517",
+    "amount": 20
+  },
+  "environment": {
+    "provider_mode": "timeout"
+  },
+  "timestamp": "2026-10-29T12:00:00Z"
+}

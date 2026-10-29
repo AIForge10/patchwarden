@@ -1,4 +1,4 @@
-"""Public live-demo endpoint: bundled alerts only, capped, E2B-only, never opens PRs."""
+"""Public live-demo endpoint: bundled alerts only, capped, E2B-only, PRs only by opt-in."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,7 +13,9 @@ from patchwarden.store import list_events
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DATABASE_URL", f"sqlite:///{tmp_path / 'runs.db'}")
     monkeypatch.setattr(config, "WEBHOOK_SECRET", "test-secret")
-    monkeypatch.setattr(config, "ALLOWED_REPO_URL", "https://github.com/Satyabratadas/patchwarden-demo")
+    monkeypatch.setattr(
+        config, "ALLOWED_REPO_URL", "https://github.com/Satyabratadas/patchwarden-demo"
+    )
     monkeypatch.setattr(config, "NEBIUS_API_KEY", "dummy-key")  # pragma: allowlist secret
     monkeypatch.setattr(config, "NEBIUS_MODEL_REASONING", "nvidia/ok")
     monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", False)
@@ -32,17 +34,17 @@ def client(tmp_path, monkeypatch):
     demo.reset()
 
 
-def test_lists_the_six_bundled_cases(client) -> None:
+def test_lists_the_bundled_cases(client) -> None:
     body = client.get("/demo").json()
     assert body["enabled"] and body["remaining_today"] == 2 and body["busy_run"] is None
-    assert [case["case"] for case in body["cases"]] == ["01", "02", "03", "04", "05", "06"]
+    assert [case["case"] for case in body["cases"]] == ["01", "02", "03", "04", "05", "06", "07"]
     assert body["cases"][1]["repair_discovery"] is True
 
 
 def test_starts_a_run_from_the_bundled_alert_only(client) -> None:
     response = client.post("/demo/runs", json={"case": "04", "repo_url": "https://evil.example"})
     assert response.status_code == 202
-    (incident, repair), = client.started
+    ((incident, repair),) = client.started
     assert incident.repo_url == "https://github.com/Satyabratadas/patchwarden-demo"
     assert incident.reproducer_id == "checkout_unknown_sku" and repair is False
     assert incident.incident_id.startswith("demo-004-live-")
@@ -93,3 +95,19 @@ def test_missing_fixtures_disable_the_demo(client, monkeypatch, tmp_path) -> Non
     body = client.get("/demo").json()
     assert body["enabled"] is False and "missing" in body["reason"]
     assert client.post("/demo/runs", json={"case": "01"}).status_code == 403
+
+
+def test_public_prs_need_the_opt_in_and_a_github_target(client, monkeypatch) -> None:
+    assert client.get("/demo").json()["opens_prs"] is False
+    monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", True)
+    monkeypatch.setattr(config, "PUBLIC_DEMO_OPEN_PRS", True)
+    monkeypatch.setattr(config, "GITHUB_TOKEN", "")
+    body = client.get("/demo").json()
+    assert body["enabled"] is False and "GitHub is not configured" in body["reason"]
+    monkeypatch.setattr(config, "GITHUB_TOKEN", "demo-token")  # pragma: allowlist secret
+    monkeypatch.setattr(config, "GITHUB_OWNER", "Satyabratadas")
+    monkeypatch.setattr(config, "GITHUB_TARGET_REPO", "patchwarden-demo")
+    body = client.get("/demo").json()
+    assert body["enabled"] and body["opens_prs"]
+    assert body["pr_repo"] == "https://github.com/Satyabratadas/patchwarden-demo"
+    assert client.post("/demo/runs", json={"case": "01"}).status_code == 202
