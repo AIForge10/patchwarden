@@ -1,4 +1,4 @@
-"""After-patch verifier: the verifier, never the model, sets VERIFIED. Owner: Satyabrata."""
+"""After-patch verifier: the verifier, never the model, sets VERIFIED."""
 
 import shutil
 from dataclasses import dataclass, field
@@ -71,8 +71,8 @@ def verify_discovery_fix(handle, baseline: dict, scenario) -> VerificationResult
 
     The sandbox is assumed to already hold the candidate files. Discovery still cannot
     author assertions: the trusted runner and invariant decide whether the defect holds.
-    The second repair loop (plan P2) is not wired into the orchestrator; this function
-    exists so a secondary patch can be judged the same way as the incident fix.
+    The orchestrator's second repair loop (--repair-discovery) uses it, so a secondary
+    patch is judged the same way as the incident fix.
     """
     from patchwarden.discovery.catalog import load_invariants
     from patchwarden.discovery.runner import evaluate_invariant, execute_scenario

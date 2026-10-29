@@ -1,4 +1,4 @@
-"""A2: Settings validation. No network, no secrets required in the environment."""
+"""Settings validation. No network, no secrets required in the environment."""
 
 import pytest
 from pydantic import ValidationError

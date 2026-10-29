@@ -1,6 +1,6 @@
 # Evaluation
 
-Six controlled cases from plan section 12, run live on October 28, 2026. Every number below
+Six controlled cases, run live on October 28, 2026. Every number below
 comes from an executed run: `make evaluation` rebuilds [`evaluation/cases.csv`](evaluation/cases.csv) from
 the run event log and the evidence manifests listed in [`evaluation/cases.json`](evaluation/cases.json).
 Copies of those manifests are in [`evaluation/evidence/`](evaluation/evidence/); `evidence_hash`

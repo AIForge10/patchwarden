@@ -1,6 +1,6 @@
-"""Settings from environment variables. Owner: Satyabrata.
+"""Settings from environment variables.
 
-Plan section 5: validated Settings, get_settings, validate_startup, public_config.
+Validated Settings, get_settings, validate_startup, public_config.
 Module-level names stay so callers and tests can keep reading `config.MAX_PATCH_ATTEMPTS`
 and monkeypatching individual fields.
 """

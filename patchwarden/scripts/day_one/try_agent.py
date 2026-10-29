@@ -1,4 +1,4 @@
-"""A2 + A3 check: traceback + file -> diff, then the same call again to prove the cache.
+"""Client check: traceback + file -> diff, then the same call again to prove the cache.
 
 Run from the project root:
     python patchwarden/scripts/day_one/try_agent.py

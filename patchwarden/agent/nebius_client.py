@@ -1,4 +1,4 @@
-"""Nebius client: chat calls, retries, timeouts, and a replay cache. Owner: Satyabrata.
+"""Nebius client: chat calls, retries, timeouts, and a replay cache.
 
 Usage:
     from agent.nebius_client import chat

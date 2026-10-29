@@ -214,5 +214,5 @@ docs/
 
 ---
 
-Built by Satyabrata Das and Atina Ruvinova during the hackathon (first commit October 8, 2026).
+Built for the Nebius x NVIDIA Global AI Hackathon (first commit October 8, 2026).
 Licensed under [Apache-2.0](LICENSE).

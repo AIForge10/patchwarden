@@ -1,6 +1,6 @@
-"""In-process sliding-window limiter. Owner: Satyabrata.
+"""In-process sliding-window limiter.
 
-Plan section 10: rate-limit webhook and model requests; cap payload size.
+Rate-limit webhook and model requests; cap payload size.
 One process is enough for the demo API. Cached model replies do not count.
 """
 

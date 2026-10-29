@@ -1,4 +1,4 @@
-"""Context step: find the files a traceback names and read them safely. Owner: Satyabrata."""
+"""Context step: find the files a traceback names and read them safely."""
 
 import difflib
 import re
@@ -74,7 +74,7 @@ def imported_sources(test_path: str, repo_root) -> list:
 
 
 def select_context_paths(traceback: str, repo_root, max_files: int = 5) -> list:
-    """Plan name for paths_from_traceback (PDF section 6)."""
+    """Alias for paths_from_traceback."""
     return paths_from_traceback(traceback, repo_root, max_files)
 
 

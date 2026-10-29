@@ -1,6 +1,6 @@
-"""Evidence-gated run coordinator. Owner: Satyabrata.
+"""Evidence-gated run coordinator.
 
-Runs the gate sequence from plan section 9. Every gate fails closed: when a step
+Runs the gate sequence. Every gate fails closed: when a step
 cannot prove its result, the run stops with a failure code instead of claiming success.
 """
 

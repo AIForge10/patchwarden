@@ -30,7 +30,7 @@ RECEIVED ─► BASELINING      fresh E2B sandbox + local workspace, detached ch
            VERIFIED          reproducer green, original suite green, protected hashes unchanged
              ▼  (RUN_DISCOVERY)
            CHALLENGING ─► CONFIRMED_DISCOVERY ─► VERIFIED   (experimental, see below)
-                              └─► PATCHING ⇄ VERIFYING ─► VERIFIED   (REPAIR_DISCOVERY, plan P2)
+                              └─► PATCHING ⇄ VERIFYING ─► VERIFIED   (REPAIR_DISCOVERY)
              ▼
            evidence/<run_id>.json
              ▼  (OPEN_PR_ON_VERIFIED)
@@ -74,7 +74,7 @@ use it, and so does a machine without an E2B key.
 - The GitHub token is used only by `github/client.py`, only after VERIFIED, and never reaches
   the sandbox.
 
-## Discovery (A6, experimental)
+## Discovery (experimental)
 
 After the core repair is verified, the model picks up to `MAX_SCENARIOS` scenarios from the
 human-authored catalog: scenario ID, invariant ID and bounded parameters only
@@ -92,13 +92,13 @@ Discovery can never fail or downgrade a verified repair. Model or runner problem
 `DISCOVERY_UNCONFIRMED` / `ORACLE_UNAVAILABLE` events and the run returns to VERIFIED.
 By default a confirmed defect is reported in the PR's "Additional scenarios" table as
 **unresolved**, and the PR carries only the verified incident fix. With
-`REPAIR_DISCOVERY=true` (or `run_incident --repair-discovery`) the second repair loop (plan
-P2) runs: up to `MAX_PATCH_ATTEMPTS` patches on top of the verified fix, each judged by
+`REPAIR_DISCOVERY=true` (or `run_incident --repair-discovery`) the second repair loop
+runs: up to `MAX_PATCH_ATTEMPTS` patches on top of the verified fix, each judged by
 `verifier.verify_discovery_fix` (confirmed oracle now holds, original reproducer green, suite
 green, protected hashes intact). Only then does the combined diff ship; otherwise the first
-verified patch ships alone (plan section 9, branch rule).
+verified patch ships alone.
 
-## Publishing (A7)
+## Publishing
 
 `orchestrator.maybe_create_pr` requires VERIFIED with baseline red, reproducer green, suite
 green and oracle intact. It commits the exact verified file contents onto the pinned SHA
@@ -107,7 +107,7 @@ stacking commits, and `open_pull_request` returns an existing open PR rather tha
 second one. If GitHub fails, the run stays VERIFIED with its evidence and a `GITHUB_ERROR`
 event. It never claims PR_OPENED without a URL. PatchWarden never merges or deploys.
 
-## Progress UI (A7)
+## Progress UI
 
 `make run`, then open `http://127.0.0.1:8000/` (redirects to `/ui/`).
 
@@ -172,7 +172,7 @@ This uses the real model. It opens a real PR on `GITHUB_TARGET_REPO` when
 `GITHUB_TARGET_REPO` must be the same repository, or the commit lookup fails and the run
 records `GITHUB_ERROR`.
 
-## Decisions to verify (plan section 18)
+## Decisions to verify
 
 | Item | Status |
 |---|---|

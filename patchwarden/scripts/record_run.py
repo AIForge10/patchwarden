@@ -1,4 +1,4 @@
-"""Export a finished run so the progress UI can replay it offline (A7).
+"""Export a finished run so the progress UI can replay it offline.
 
     python -m patchwarden.scripts.record_run <run_id>
     then open /ui/?replay=recordings/<run_id>.json   (or "Play recording" in the UI)

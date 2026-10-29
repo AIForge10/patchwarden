@@ -2,7 +2,7 @@
 
 Running notes from building PatchWarden. Facts only: what we ran and what happened.
 
-## Oct 11: first day-one test (Nemotron 3 Ultra)
+## Oct 11: first harness test (Nemotron 3 Ultra)
 
 - Model: `nvidia/Nemotron-3-Ultra-550b-a55b`, base URL `https://api.tokenfactory.nebius.com/v1/`.
 - Result: 0 of 6 runs fixed, but **this was our harness, not the model**:
@@ -17,7 +17,7 @@ Running notes from building PatchWarden. Facts only: what we ran and what happen
 - `models.list()` worked first time and is the easiest way to get exact model IDs. IDs are case-sensitive and mix styles (`Nemotron-3-Ultra-550b-a55b` vs `nemotron-3-super-120b-a12b`).
 - Moving from a flat layout to the `patchwarden/` package meant every import had to change (`from patchwarden import config`). Running tests as `python -m pytest` avoids needing extra path config.
 
-## Oct 21: day-one rerun (Nemotron 3 Super)
+## Oct 21: harness rerun (Nemotron 3 Super)
 
 - Model: `nvidia/nemotron-3-super-120b-a12b` (used for development to save credits).
 - Task: fix a `KeyError` on a malformed payment response; 2 tests, 1 failing. The fixed file is checked by running both tests.
@@ -36,7 +36,7 @@ Running notes from building PatchWarden. Facts only: what we ran and what happen
 - The model must always see the source files the traceback names. The context step (`patchwarden/agent/context.py`) already reads them before every patch request.
 - Never trust a fix from the trace alone: the trace-only runs passed the original failing case but broke other behavior. This is why the verifier runs the full test suite, not just the reproducer.
 
-## Oct 21: agent client check (A2 + A3)
+## Oct 21: agent client check
 
 - `healthcheck_model()` confirmed both configured models are available to our key.
 - Diagnosis prompt returned the required format: `EVIDENCE: buggy_checkout.py:6 ...`, a correct hypothesis, and `UNCERTAINTY: medium`.

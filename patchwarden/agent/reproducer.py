@@ -1,4 +1,4 @@
-"""Write the incident reproducer from the alert when none ships with the repo. Owner: Satyabrata.
+"""Write the incident reproducer from the alert when none ships with the repo.
 
 The model writes one pytest file; trusted code saves it at a fixed path and accepts it only if,
 at the pinned commit and inside the sandbox, it fails with the reported error type at the exact

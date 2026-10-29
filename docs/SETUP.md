@@ -56,39 +56,13 @@ Always run commands from inside the `patchwarden` folder.
 | `make probe`     | Nebius model probe                                                |
 | `make lock`      | Re-pin after changing dependencies in `pyproject.toml`            |
 
-## Who owns which folder
-
-A = Satyabrata (agent / verifier / orchestrator), B = Atina (demo app / trusted evidence). This is the original day-one split.
-
-| Path | Owner | Plan piece |
-|------|-------|------------|
-| `patchwarden/models.py` | Both | Frozen interfaces (day one) |
-| `patchwarden/config.py` | A | A2 validated Settings |
-| `patchwarden/agent/nebius_client.py`, `prompts.py`, `context.py`, `patcher.py`, `reproducer.py`, `patchwarden/orchestrator.py` | A | A2, A5 |
-| `patchwarden/sandbox/` | A | A3 |
-| `patchwarden/verifier/` | A | A4 |
-| `patchwarden/discovery/` (except `catalog.py`) | A | A6 |
-| `patchwarden/scripts/model_probe.py` | A | A1 |
-| `demo_app/` | B | B1 |
-| `demo_app/contracts/`, `patchwarden/discovery/catalog.py` | B | B2 |
-| `patchwarden/api/`, `store.py`, `security.py`, `events.py`, `patchwarden/scripts/send_demo_alert.py` | B | B3 |
-| `patchwarden/agent/research.py` | B | B4 |
-| `patchwarden/reporting/` | B | B5 |
-| `patchwarden/github/` | B | B6 |
-| `patchwarden/ui/` | B | B7 |
-| `README.md`, `docs/` | B | B8 |
-
-Working rules (from the plan): one small pull request per feature, branch off `main`, the other person reviews before merge.
-Stuck for more than two hours means ask the other.
-
 ## Changing packages
 
 `requirements.txt` and `requirements-dev.txt` are lockfiles generated from `pyproject.toml`. To add a package:
 add it to `pyproject.toml`, run `make lock`, then `make install`, and commit all three files together.
-Tell the other person first, so we stay on the same versions.
 
 ## If something goes wrong
 
 - `pip install` fails: check `python --version` shows 3.11 and the `patchwarden` environment is active.
 - `ModuleNotFoundError: patchwarden`: run `make install` again (it installs the package in editable mode).
-- Still stuck: ask the other person, and write what confused you in `docs/feedback.md`.
+- Still stuck: open an issue on the repository.

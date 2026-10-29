@@ -31,7 +31,7 @@ run:
 serve:              ## bind 0.0.0.0 (Docker / hosted). PORT defaults to 8000.
 	uvicorn patchwarden.api.main:app --host 0.0.0.0 --port $${PORT:-8000}
 
-probe:              ## Nebius model probe (A1)
+probe:              ## list Nebius models and send one test message
 	python -m patchwarden.scripts.model_probe
 
 incident:           ## one incident end to end (real model; opens a PR if OPEN_PR_ON_VERIFIED + GitHub set)

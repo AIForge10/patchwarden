@@ -1,4 +1,4 @@
-"""A1: list configured Nebius models, then send one cheap test message.
+"""List configured Nebius models, then send one cheap test message.
 
     python -m patchwarden.scripts.model_probe
     make probe
