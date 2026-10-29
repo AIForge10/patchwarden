@@ -22,6 +22,8 @@ COLUMNS = [
     "case_id",
     "variant_sha",
     "run_id",
+    "model",
+    "patch_models",
     "seeded",
     "blind",
     "reproduced",
@@ -62,10 +64,16 @@ def row_for(case: dict, out_dir: Path) -> dict:
     rejected = sum(message.startswith("Rejected a proposed scenario") for message in messages)
     expected = set(case.get("seeded_hidden_defects", []))
     elapsed = (events[-1].created_at - events[0].created_at).total_seconds() if events else 0
+    # Runs before the patch-model ladder used the reasoning model for every attempt.
+    patch_models = manifest.get("patch_models") or (
+        [manifest["model_id"]] * max((int(a) for a in attempts), default=0) if manifest else []
+    )
     return {
         "case_id": case["case_id"],
         "variant_sha": run.incident.commit_sha,
         "run_id": run.run_id,
+        "model": manifest.get("model_id") or case.get("model", "none"),
+        "patch_models": " > ".join(name.split("/")[-1] for name in patch_models) or "none",
         "seeded": "true",
         "blind": _flag(case.get("blind", False)),
         "reproduced": _flag("DIAGNOSING" in stages),

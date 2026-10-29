@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     NEBIUS_BASE_URL: str = ""
     NEBIUS_MODEL_REASONING: str = ""
     NEBIUS_MODEL_FAST: str = ""
+    # Patch-model ladder, comma-separated: attempt N uses entry N (the last one repeats).
+    # Empty: every attempt uses NEBIUS_MODEL_REASONING. Only a failed verification moves up.
+    NEBIUS_PATCH_MODELS: str = ""
     TAVILY_API_KEY: str = ""
     E2B_API_KEY: str = ""
     GITHUB_TOKEN: str = ""
@@ -84,6 +87,15 @@ def validate_startup(settings: Any) -> None:
         raise ValueError("WEBHOOK_SECRET is required to start the API")
     if not settings.ALLOWED_REPO_URL:
         raise ValueError("ALLOWED_REPO_URL must be the exact allowlisted repository")
+
+
+def patch_model(attempt: int) -> str:
+    """The model that writes patch attempt `attempt` (1-based)."""
+    module = sys.modules[__name__]
+    ladder = [name.strip() for name in module.NEBIUS_PATCH_MODELS.split(",") if name.strip()]
+    if not ladder:
+        return module.NEBIUS_MODEL_REASONING
+    return ladder[min(attempt, len(ladder)) - 1]
 
 
 def public_config(settings: Settings | None = None) -> dict[str, Any]:

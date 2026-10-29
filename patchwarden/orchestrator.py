@@ -196,6 +196,8 @@ def run_incident(incident: IncidentEvidence, repair_discovery: bool | None = Non
             result.discoveries = challenge(result, handle, baseline, repair)
         manifest = build_manifest(result, baseline["test_hashes"], commands)
         manifest["model_id"] = config.NEBIUS_MODEL_REASONING
+        # Which model wrote each primary attempt; the last one wrote the verified patch.
+        manifest["patch_models"] = [config.patch_model(n) for n in range(1, patch.attempt + 1)]
         manifest["patch"] = result.patch.unified_diff  # patch_sha256 is checkable against it
         manifest["incident_id"] = incident.incident_id
         manifest["reproducer_id"] = incident.reproducer_id

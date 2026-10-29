@@ -12,9 +12,15 @@ comes from model output.
   the six alerts and watch a real run: Nemotron on Nebius, an E2B sandbox, the trusted gates, the
   verified diff and the evidence. Recorded runs replay there too. (`GET /health` shows the configuration.)
 - **Headline run:** signed alert `demo-001` → PR [#8](https://github.com/Satyabratadas/patchwarden-demo/pull/8) (replay it in the UI: `/ui/?replay=recordings/run-376fefbdfc1a.json`)
+- **Model ladder run:** Nano's patch is rejected by the verifier, the run escalates to Super, and the
+  fix verifies (`/ui/?replay=recordings/run-6f018665190c.json`)
 - **All generated PRs:** https://github.com/Satyabratadas/patchwarden-demo/pulls
 - **Video (3 min):** _link added at submission_
 - **Track:** Coding and Agentic Engineering
+- **Try it (no login):** open the live product and press **Run live** on any alert. When the
+  day's live runs are used up, open any recorded run to replay it.
+- **Built during the hackathon:** first commit October 8, 2026; all code was written in the
+  submission period.
 
 ## Built with
 
@@ -26,6 +32,26 @@ comes from model output.
 | **E2B** | Runs every command that executes repository code in a microVM whose network can reach only PyPI |
 | **GitHub API** | Commits the verified files onto the pinned commit and opens a PR. It never merges |
 | FastAPI, SQLite, pytest | Signed webhook, append-only event log, the tests that decide every gate |
+
+### How we use NVIDIA Nemotron on Nebius Token Factory
+
+- **Every run calls Token Factory at runtime**, 3 to 4 times: Nemotron diagnoses the observed
+  failure, writes the patch (whole files; PatchWarden builds the diff), picks challenge scenarios
+  from the catalog, and with `--repair-discovery` writes the second fix. Hosted runs do the same.
+- **Three Nemotron models, measured.** Nemotron 3 Super is the default. Nemotron 3 Ultra (550B)
+  and Nemotron 3 Nano (30B) ran the same six cases with one environment variable changed: all
+  three verified 6/6 incidents with 0 false positives ([comparison](docs/evaluation.md#same-six-cases-on-other-nemotron-models)).
+- **The verifier picks the model.** With `NEBIUS_PATCH_MODELS` set to a ladder such as
+  Nano → Super → Ultra, the first patch attempt goes to the fast model and only a patch that
+  fails the trusted checks in the sandbox moves the run up to a larger model. Escalation is
+  driven by evidence, never by the model's own confidence. Live on the six cases: Nano's patch
+  verified in 3, the verifier escalated the other 3 to Super, and all 6 verified with the hidden
+  double charge still found in 5/5 seeded cases.
+- **Where Token Factory sped us up.** The OpenAI-compatible endpoint let us use the standard
+  `openai` client with retries, timeouts and token caps, and nothing provider-specific.
+  `models.list()` gave exact model IDs. Switching models is one variable, which is how we reran
+  the six cases on two more Nemotron models in an afternoon. Notes, issues and suggestions are in
+  [`docs/feedback.md`](docs/feedback.md).
 
 ## How it works
 
@@ -81,6 +107,11 @@ files by `make evaluation`. Full table and method: [`docs/evaluation.md`](docs/e
 charge: it chose the scenario that exposes it on its own, and trusted code confirmed it twice and
 checked it against a known-good control. One verified fix (case 03) is correct but narrower than
 a human would write, which is why every change goes to a reviewer.
+
+**Same cases on other Nemotron models.** With only the model ID changed, Nemotron 3 Ultra and
+Nemotron 3 Nano also verified 6/6 incidents with 0 false positives; Nano needed the verifier's
+feedback loop twice. With the Nano → Super → Ultra patch ladder, all six verified and the verifier
+escalated three of them to Super. Super stays the default. See the comparison in [`docs/evaluation.md`](docs/evaluation.md#same-six-cases-on-other-nemotron-models).
 
 ## Run it
 

@@ -39,6 +39,7 @@ def test_health_reports_ok_without_secrets(tmp_path, monkeypatch) -> None:
     assert body == {
         "ok": True,
         "model": "nvidia/ok",
+        "patch_models": None,
         "model_configured": True,
         "github_configured": False,
         "open_pr_on_verified": False,

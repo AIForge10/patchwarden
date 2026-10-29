@@ -45,6 +45,7 @@ def create_app() -> FastAPI:
         return {
             "ok": True,
             "model": settings.NEBIUS_MODEL_REASONING or None,
+            "patch_models": settings.NEBIUS_PATCH_MODELS or None,
             "model_configured": bool(settings.NEBIUS_API_KEY and settings.NEBIUS_MODEL_REASONING),
             "github_configured": bool(settings.GITHUB_TOKEN and settings.GITHUB_TARGET_REPO),
             "open_pr_on_verified": settings.OPEN_PR_ON_VERIFIED,

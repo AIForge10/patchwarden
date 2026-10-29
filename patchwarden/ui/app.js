@@ -131,6 +131,7 @@ function renderEvidence(status) {
       ["patch_sha256", evidence.patch_sha256],
       ["protected files", Object.keys(evidence.protected_test_sha256 || {}).length],
       ["model", evidence.model_id],
+      ...(evidence.patch_models ? [["patch attempts", evidence.patch_models.map((m) => m.split("/").pop()).join(" → ")]] : []),
       ["verified_at", evidence.verified_at],
     ];
     if (evidence.sandbox) kv.push(["sandbox", [evidence.sandbox.backend, evidence.sandbox.sandbox_id].filter(Boolean).join(" ")]);

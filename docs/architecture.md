@@ -18,7 +18,9 @@ RECEIVED ─► BASELINING      fresh E2B sandbox + local workspace, detached ch
              │               and optional untrusted Tavily hints (fail-open if search fails)
              ▼
            PATCHING ⇄ VERIFYING   up to MAX_PATCH_ATTEMPTS, each from a clean pinned checkout;
-             │                     verifier output is the next attempt's feedback
+             │                     verifier output is the next attempt's feedback;
+             │                     optional NEBIUS_PATCH_MODELS ladder: a rejected patch
+             │                     moves the next attempt to a larger model
              ├─► FAILED (VERIFY_FAILED / PATCH_REJECTED / MODEL_UNAVAILABLE / SANDBOX_TIMEOUT …)
              ▼
            VERIFIED          reproducer green, original suite green, protected hashes unchanged

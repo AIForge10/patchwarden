@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from patchwarden import config
 from patchwarden.config import Settings, public_config, validate_startup
 
 
@@ -52,3 +53,11 @@ def test_startup_rejects_monkeypatched_out_of_range_values() -> None:
     settings.MAX_PATCH_ATTEMPTS = 9
     with pytest.raises(ValueError, match="MAX_PATCH_ATTEMPTS"):
         validate_startup(settings)
+
+
+def test_patch_model_ladder_repeats_its_last_entry(monkeypatch) -> None:
+    monkeypatch.setattr(config, "NEBIUS_MODEL_REASONING", "super")
+    monkeypatch.setattr(config, "NEBIUS_PATCH_MODELS", "")
+    assert [config.patch_model(n) for n in (1, 2, 3)] == ["super"] * 3
+    monkeypatch.setattr(config, "NEBIUS_PATCH_MODELS", " nano, super ,")
+    assert [config.patch_model(n) for n in (1, 2, 3)] == ["nano", "super", "super"]

@@ -125,10 +125,17 @@ def repair_until_verified(
     failure = failure_output(baseline)
     feedback, outcome = "", None
     for attempt in range(1, max_attempts + 1):
-        info = {"attempt": attempt}
-        step(RunStatus.PATCHING, f"Attempt {attempt} of {max_attempts}: requesting a patch", info)
+        model = config.patch_model(attempt)
+        info = {"attempt": attempt, "model": model}
+        message = f"Attempt {attempt} of {max_attempts}: requesting a patch from {model}"
+        if attempt > 1 and model != config.patch_model(attempt - 1):
+            message = (
+                f"Attempt {attempt} of {max_attempts}: verifier rejected the last patch, "
+                f"escalating to {model}"
+            )
+        step(RunStatus.PATCHING, message, info)
         reset_to_commit(sandbox, sha)  # context must come from the pinned files, not a past try
-        proposal = propose_patch(failure, repo, feedback, attempt, diagnosis, sha)
+        proposal = propose_patch(failure, repo, feedback, attempt, diagnosis, sha, model=model)
         if not proposal.unified_diff:
             feedback = f"Your previous reply was not usable: {proposal.problem}."
             step(RunStatus.PATCHING, f"Attempt {attempt}: {proposal.problem}", info)
