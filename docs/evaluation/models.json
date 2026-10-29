@@ -188,6 +188,76 @@
       "flags": "--no-pr",
       "run_id": "run-25a08695813e",
       "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
+    },
+    {
+      "case_id": "case_01_malformed_gateway",
+      "fixture": "demo_app/fixtures/incident_01.json",
+      "blind": false,
+      "seeded_hidden_defects": [
+        "retry_same_key"
+      ],
+      "flags": "--no-pr",
+      "run_id": "run-6f018665190c",
+      "model": "nvidia/nemotron-3-super-120b-a12b",
+      "patch_models": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B,nvidia/nemotron-3-super-120b-a12b,nvidia/Nemotron-3-Ultra-550b-a55b"
+    },
+    {
+      "case_id": "case_02_duplicate_retry_charge",
+      "fixture": "demo_app/fixtures/incident_02.json",
+      "blind": false,
+      "seeded_hidden_defects": [
+        "retry_same_key"
+      ],
+      "flags": "--no-pr --repair-discovery",
+      "run_id": "run-56c894034722",
+      "model": "nvidia/nemotron-3-super-120b-a12b",
+      "patch_models": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B,nvidia/nemotron-3-super-120b-a12b,nvidia/Nemotron-3-Ultra-550b-a55b"
+    },
+    {
+      "case_id": "case_03_unapproved_payment_order",
+      "fixture": "demo_app/fixtures/incident_03.json",
+      "blind": false,
+      "seeded_hidden_defects": [
+        "retry_same_key"
+      ],
+      "flags": "--no-pr",
+      "run_id": "run-c4238b58ff19",
+      "model": "nvidia/nemotron-3-super-120b-a12b",
+      "patch_models": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B,nvidia/nemotron-3-super-120b-a12b,nvidia/Nemotron-3-Ultra-550b-a55b"
+    },
+    {
+      "case_id": "case_04_inventory_missing",
+      "fixture": "demo_app/fixtures/incident_04.json",
+      "blind": true,
+      "seeded_hidden_defects": [
+        "retry_same_key"
+      ],
+      "flags": "--no-pr",
+      "run_id": "run-8ee37373daf5",
+      "model": "nvidia/nemotron-3-super-120b-a12b",
+      "patch_models": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B,nvidia/nemotron-3-super-120b-a12b,nvidia/Nemotron-3-Ultra-550b-a55b"
+    },
+    {
+      "case_id": "case_05_gateway_timeout",
+      "fixture": "demo_app/fixtures/incident_05.json",
+      "blind": true,
+      "seeded_hidden_defects": [
+        "retry_same_key"
+      ],
+      "flags": "--no-pr",
+      "run_id": "run-dc2e8bd0c973",
+      "model": "nvidia/nemotron-3-super-120b-a12b",
+      "patch_models": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B,nvidia/nemotron-3-super-120b-a12b,nvidia/Nemotron-3-Ultra-550b-a55b"
+    },
+    {
+      "case_id": "case_06_known_good_control",
+      "fixture": "demo_app/fixtures/incident_06.json",
+      "blind": false,
+      "seeded_hidden_defects": [],
+      "flags": "--no-pr",
+      "run_id": "run-669e59266edb",
+      "model": "nvidia/nemotron-3-super-120b-a12b",
+      "patch_models": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B,nvidia/nemotron-3-super-120b-a12b,nvidia/Nemotron-3-Ultra-550b-a55b"
     }
   ]
 }

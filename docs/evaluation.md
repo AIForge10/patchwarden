@@ -40,8 +40,9 @@ negative control for every repeated violation). Runs took 26–66 s end to end.
 
 On October 29 the six cases were run again with only `NEBIUS_MODEL_REASONING` changed, once on
 `nvidia/Nemotron-3-Ultra-550b-a55b` and once on `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`
-(no PRs; same seeded and known-good commits, same E2B, Tavily and gates). Super stays the
-default. [`evaluation_models.csv`](evaluation_models.csv) is built the same way from
+(no PRs; same seeded and known-good commits, same E2B, Tavily and gates), and once more with
+the patch-model ladder. Super stays the default.
+[`evaluation_models.csv`](evaluation_models.csv) is built the same way from
 [`evaluation/models.json`](evaluation/models.json) and includes the Super rows above.
 
 | Model | Verified | Attempts | Hidden double charge (seeded, 5 cases) | Repaired (case 02) | Known-good control | False positives |
@@ -49,7 +50,14 @@ default. [`evaluation_models.csv`](evaluation_models.csv) is built the same way 
 | Nemotron 3 Super (120B) | 6/6 | all 1 | 5/5 | yes | none claimed | 0 |
 | Nemotron 3 Ultra (550B) | 6/6 | all 1 | 4/5 | yes | none claimed | 0 |
 | Nemotron 3 Nano (30B) | 6/6 | 1 or 2 | 4/5 | no (not found) | none claimed | 0 |
+| **Ladder** Nano → Super → Ultra (patches), Super (diagnosis, scenarios) | 6/6 | 1 or 2 | 5/5 | yes | none claimed | 0 |
 
+- **The ladder keeps Super's results and sends half the patches to Nano.** With
+  `NEBIUS_PATCH_MODELS` set to Nano, Super, Ultra, Nano's first patch verified in cases 02, 03
+  and 05. In cases 01, 04 and 06 the verifier rejected it and the run escalated to Super, which
+  verified. In case 04 Nano edited the wrong file (`store.py`); Super fixed `main.py`. Ultra was
+  never needed. These six runs had the cache off and are listed in `evaluation/models.json` with
+  the models that wrote each attempt (`patch_models`).
 - **Every model got every incident verified.** The gates do not depend on which model writes the
   patch: the trusted reproducer, suite and hash checks decide.
 - **Nano used the retry loop.** In cases 01 and 04 its first patch failed verification; the
@@ -59,7 +67,7 @@ default. [`evaluation_models.csv`](evaluation_models.csv) is built the same way 
   usable catalog entry, so no scenario ran. Nano's case 02 proposals paired each scenario with
   an invariant the catalog does not approve for it; catalog validation rejected all three, so
   nothing ran and nothing was claimed. In both runs the verified incident fix still stood.
-- **No false positives on any model.** On the known-good commit, all three models ran
+- **No false positives in any configuration.** On the known-good commit, every run included
   `retry_same_key` and the invariant held.
 - Timings are not comparable across days: the Super runs also opened PRs.
 

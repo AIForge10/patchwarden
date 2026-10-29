@@ -7,6 +7,13 @@
     "label": "Headline: signed alert demo-001 → verified fix, hidden defect found, PR #8"
   },
   {
+    "run_id": "run-6f018665190c",
+    "incident_id": "demo-001-r1793262700",
+    "file": "run-6f018665190c.json",
+    "status": "VERIFIED",
+    "label": "Model ladder: Nano's patch rejected by the verifier → escalated to Super → verified, hidden defect found"
+  },
+  {
     "run_id": "run-4147c3ee3701",
     "incident_id": "demo-002-live-0e8cf3a0",
     "file": "run-4147c3ee3701.json",

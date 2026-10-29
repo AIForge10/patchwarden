@@ -78,6 +78,11 @@ Running notes from building PatchWarden. Facts only: what we ran and what happen
   an invariant the catalog does not allow, and Ultra once returned no usable scenario list. Our
   validator rejected both safely. A JSON-schema or constrained-output option on Token Factory
   would make this reliable for agent loops.
+- Because swapping models is cheap, we added a patch-model ladder: Nano writes the first patch and
+  only a patch that fails verification escalates to Super, then Ultra. On the six cases Nano's
+  patch verified in 3 and Super fixed the other 3; Ultra was never needed. This is the
+  "Nano for fast calls, bigger models for hard reasoning" split, with the trusted verifier
+  deciding when a call is hard.
 
 ### Suggestions for Token Factory
 

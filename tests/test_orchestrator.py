@@ -140,6 +140,28 @@ def test_every_attempt_failing_ends_failed_not_verified(target, monkeypatch) -> 
     assert _failure_codes(result.run_id) == ["VERIFY_FAILED"]
 
 
+def test_only_a_failed_verification_escalates_to_the_next_patch_model(target, monkeypatch) -> None:
+    monkeypatch.setattr(config, "NEBIUS_PATCH_MODELS", "nano,super,ultra")
+    monkeypatch.setattr(scenarios, "chat_full", lambda *args, **kwargs: Reply("", "stop", False))
+    code = {"nano": REGRESSION, "super": FIX, "ultra": FIX}
+    asked = []
+
+    def chat_full(prompt, system="", model="", max_tokens=0, use_cache=True):
+        if system == DIAGNOSIS_SYSTEM:
+            return Reply(DIAGNOSIS, "stop", False)
+        asked.append(model)
+        return Reply(_file_reply("demo_app/app/main.py", code[model]), "stop", False)
+
+    monkeypatch.setattr(patcher, "chat_full", chat_full)
+    result = run_incident(_incident(target))
+
+    assert result.status == RunStatus.VERIFIED and result.patch.attempt == 2
+    assert asked == ["nano", "super"]  # verified on super, so ultra is never called
+    assert json.loads(Path(result.evidence_path).read_text())["patch_models"] == ["nano", "super"]
+    messages = [e.message for e in list_events(result.run_id)]
+    assert any("verifier rejected the last patch, escalating to super" in m for m in messages)
+
+
 def test_model_cannot_touch_tests(target, monkeypatch) -> None:
     gutted = "def test_checkout_malformed_response_reproducer():\n    pass\n"
     _fake_model(monkeypatch, [_file_reply("demo_app/tests/test_incident.py", gutted)] * 3)
