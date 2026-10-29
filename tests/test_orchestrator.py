@@ -128,6 +128,9 @@ def test_regression_is_rejected_then_real_fix_verified(target, monkeypatch) -> N
     assert Path(result.evidence_path).is_file()
     stages = [e.stage for e in list_events(result.run_id)]
     assert list(dict.fromkeys(stages))[:2] == ["BASELINING", "DIAGNOSING"]
+    messages = [e.message for e in list_events(result.run_id)]
+    assert any("(reproducer: 1 failed in" in m for m in messages)  # pytest's own tally
+    assert "Attempt 1: VERIFY_FAILED: The original test suite now fails" in messages
     assert stages[-2:] == ["VERIFIED", "VERIFIED"]
 
 

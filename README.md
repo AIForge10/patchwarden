@@ -144,9 +144,11 @@ Offline, with no keys: `python -m patchwarden.scripts.run_incident --local --moc
 recorded run in the UI.
 
 To offer the **Run live** button on your own host, set `PUBLIC_DEMO_RUNS_PER_DAY` (for example
-`20`) with `E2B_API_KEY` set and `OPEN_PR_ON_VERIFIED=false`. Public runs use only the bundled
-alerts, one at a time, never open PRs, and refuse to start without E2B, so model-written code never
-runs on the web server. Hosted: `docker build -t patchwarden . && docker run -p 8000:8000 --env-file .env patchwarden`.
+`20`) with `E2B_API_KEY` set. Public runs use only the bundled alerts, one at a time, and refuse
+to start without E2B, so model-written code never runs on the web server. They open no PRs unless
+you also set `PUBLIC_DEMO_OPEN_PRS=true` and `OPEN_PR_ON_VERIFIED=true` with a GitHub token scoped to
+the demo repository; then each verified public run opens a human-review PR there (the hosted demo
+does this). Hosted: `docker build -t patchwarden . && docker run -p 8000:8000 --env-file .env patchwarden`.
 
 ## Honest limits
 

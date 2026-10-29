@@ -34,7 +34,7 @@ from patchwarden.sandbox.repository import (
 )
 from patchwarden.security import assert_allowed_repo
 from patchwarden.store import create_run, get_run, set_run_status
-from patchwarden.verifier.baseline import capture_baseline, failure_output
+from patchwarden.verifier.baseline import capture_baseline, failure_output, pytest_summary
 from patchwarden.verifier.evidence import build_manifest, write_evidence_bundle
 from patchwarden.verifier.patch_policy import assert_safe_patch, parse_changed_paths
 from patchwarden.verifier.verify import verify_discovery_fix
@@ -131,8 +131,14 @@ def run_incident(incident: IncidentEvidence, repair_discovery: bool | None = Non
             message = "Original suite is already red at the pinned commit; cannot judge regressions"
             return _fail(run_id, incident, "VERIFY_FAILED", message)
 
+        # pytest's own tallies from the sandbox, so the timeline shows the tests really ran.
+        red = pytest_summary(baseline["reproducer"]["stdout"]) or "failed"
+        green = pytest_summary(baseline["original_suite"]["stdout"]) or "passed"
         advance(
-            run_id, RunStatus.DIAGNOSING, f"Baseline red with {incident.error_type}; suite green"
+            run_id,
+            RunStatus.DIAGNOSING,
+            f"Baseline red with {incident.error_type} (reproducer: {red}); suite green ({green})",
+            {"reproducer": red, "original_suite": green},
         )
         failure = failure_output(baseline)
         repo = handle.root / "repo"
@@ -172,10 +178,13 @@ def run_incident(incident: IncidentEvidence, repair_discovery: bool | None = Non
                 run_id, incident, code, message, verification=outcome.result if outcome else None
             )
 
+        fixed = pytest_summary(outcome.commands["reproducer"].stdout) or "passed"
+        suite = pytest_summary(outcome.commands["suite"].stdout) or "passed"
         advance(
             run_id,
             RunStatus.VERIFIED,
-            "Reproducer green, original suite green, protected files unchanged",
+            f"Reproducer green ({fixed}), original suite green ({suite}), "
+            "protected files unchanged",
             {"attempt": patch.attempt},
         )
         result = RunResult(

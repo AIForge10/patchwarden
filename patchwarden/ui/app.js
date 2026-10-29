@@ -286,9 +286,12 @@ async function loadLive() {
   $("live-panel").hidden = false;
   const busy = demo.busy_run;
   const note = demo.enabled
-    ? `Each run checks out the pinned demo commit in a fresh E2B sandbox and calls the model live (about a minute). One run at a time; ${demo.remaining_today} left today. Pull requests are off for public runs.`
+    ? `Each run checks out the pinned demo commit in a fresh E2B sandbox and calls the model live (about a minute). One run at a time; ${demo.remaining_today} left today.`
     : demo.reason;
-  $("live-note").replaceChildren(note, busy ? el("span", {}, " A run is in progress: ", el("a", { href: `?run=${encodeURIComponent(busy)}`, textContent: "watch it" }), ".") : "");
+  const prNote = !demo.enabled ? [] : demo.opens_prs
+    ? [" Each verified run opens a real human-review pull request on ", el("a", { href: `${demo.pr_repo}/pulls`, target: "_blank", rel: "noopener", textContent: "the demo repository" }), " (never merged)."]
+    : [" Pull requests are off for public runs."];
+  $("live-note").replaceChildren(note, ...prNote, busy ? el("span", {}, " A run is in progress: ", el("a", { href: `?run=${encodeURIComponent(busy)}`, textContent: "watch it" }), ".") : "");
   $("cases").replaceChildren(...demo.cases.map((item) => {
     const button = el("button", { type: "button", className: "run-live", textContent: "Run live", disabled: !demo.enabled || Boolean(busy) || demo.remaining_today <= 0 });
     button.addEventListener("click", () => startLive(item.case, button));

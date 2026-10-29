@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     REPAIR_DISCOVERY: bool = False
     # Public "run live" button on the hosted UI: live runs per UTC day. 0 turns it off.
     PUBLIC_DEMO_RUNS_PER_DAY: int = Field(default=0, ge=0, le=500)
+    # Let those public runs open real human-review PRs (also needs OPEN_PR_ON_VERIFIED=true and
+    # a GitHub token scoped to the demo repo). Off: public runs never open PRs.
+    PUBLIC_DEMO_OPEN_PRS: bool = False
 
     def __repr__(self) -> str:
         return f"Settings({public_config(self)})"

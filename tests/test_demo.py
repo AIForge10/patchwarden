@@ -1,4 +1,4 @@
-"""Public live-demo endpoint: bundled alerts only, capped, E2B-only, never opens PRs."""
+"""Public live-demo endpoint: bundled alerts only, capped, E2B-only, PRs only by opt-in."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -93,3 +93,19 @@ def test_missing_fixtures_disable_the_demo(client, monkeypatch, tmp_path) -> Non
     body = client.get("/demo").json()
     assert body["enabled"] is False and "missing" in body["reason"]
     assert client.post("/demo/runs", json={"case": "01"}).status_code == 403
+
+
+def test_public_prs_need_the_opt_in_and_a_github_target(client, monkeypatch) -> None:
+    assert client.get("/demo").json()["opens_prs"] is False
+    monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", True)
+    monkeypatch.setattr(config, "PUBLIC_DEMO_OPEN_PRS", True)
+    monkeypatch.setattr(config, "GITHUB_TOKEN", "")
+    body = client.get("/demo").json()
+    assert body["enabled"] is False and "GitHub is not configured" in body["reason"]
+    monkeypatch.setattr(config, "GITHUB_TOKEN", "demo-token")  # pragma: allowlist secret
+    monkeypatch.setattr(config, "GITHUB_OWNER", "Satyabratadas")
+    monkeypatch.setattr(config, "GITHUB_TARGET_REPO", "patchwarden-demo")
+    body = client.get("/demo").json()
+    assert body["enabled"] and body["opens_prs"]
+    assert body["pr_repo"] == "https://github.com/Satyabratadas/patchwarden-demo"
+    assert client.post("/demo/runs", json={"case": "01"}).status_code == 202

@@ -1,6 +1,7 @@
 """Before-patch evidence: the reproducer must fail for the reported reason. Owner: Satyabrata."""
 
 import hashlib
+import re
 
 from patchwarden.sandbox.commands import run_regression_suite, run_reproducer
 
@@ -38,6 +39,12 @@ def capture_baseline(handle, incident) -> dict:
         "original_suite": suite.model_dump(),
         "test_hashes": {path: _sha256(handle, path) for path in protected_paths(handle)},
     }
+
+
+def pytest_summary(output: str) -> str:
+    """pytest's closing tally from real sandbox output ("1 failed in 0.18s"), or ""."""
+    found = re.findall(r"^=+ (\d+ (?:failed|passed|error)[^=\n]* in [\d.]+s) =+$", output, re.M)
+    return found[-1] if found else ""
 
 
 def failure_output(baseline: dict) -> str:
