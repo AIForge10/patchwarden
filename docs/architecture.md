@@ -11,8 +11,12 @@ signed alert ──► POST /webhooks/incident   HMAC, allowlisted repo, exact 4
                    │  202 + run_id; a duplicate incident_id returns the same run and starts nothing
                    ▼  (background task)
 RECEIVED ─► BASELINING      fresh E2B sandbox + local workspace, detached checkout of the pinned SHA,
-             │               hash protected files, run the reproducer + original suite (in E2B)
-             ├─► UNREPRODUCED   reproducer not red for the reported error type: stop, no model call
+             │               hash protected files, run the reproducer + original suite (in E2B).
+             │               reproducer_id "synthesize": first Nemotron writes the reproducer from
+             │               the stack trace; accepted only if pytest reports the error at the
+             │               alert's deepest repo file:line, then hashed and shipped in the PR
+             ├─► UNREPRODUCED   reproducer not red for the reported error type (or no written
+             │                  test accepted in two tries): stop, no patch request
              ▼
            DIAGNOSING        model sees the OBSERVED red output, the source files it names,
              │               and optional untrusted Tavily hints (fail-open if search fails)

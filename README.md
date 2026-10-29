@@ -2,14 +2,16 @@
 
 **An evidence-gated incident-response agent.** PatchWarden takes a signed crash alert, reproduces
 the failure in an isolated sandbox, has an NVIDIA Nemotron model write a fix, and opens a
-human-review pull request only after independent checks prove the fix. It then challenges its
-own patch with human-written behavioral rules and can find a second bug nobody reported.
+human-review pull request only after independent checks prove the fix. When the alert carries
+only a stack trace, Nemotron first writes the failing test itself, and trusted code accepts it only
+if it crashes at the exact line the alert names. PatchWarden then challenges its own patch with
+human-written behavioral rules and can find a second bug nobody reported.
 
 The model proposes; trusted code decides. No claim in the run log, the evidence file or the PR
 comes from model output.
 
 - **Live product:** https://p01--patchwarden-api--smbsdvp245v8.code.run/ui/ Press **Run live** on any of
-  the six alerts and watch a real run: Nemotron on Nebius, an E2B sandbox, the trusted gates, the
+  the alerts (07 has no reproducer attached) and watch a real run: Nemotron on Nebius, an E2B sandbox, the trusted gates, the
   verified diff and the evidence. Recorded runs replay there too. (`GET /health` shows the configuration.)
 - **Headline run:** signed alert `demo-001` → PR [#8](https://github.com/Satyabratadas/patchwarden-demo/pull/8) (replay it in the UI: `/ui/?replay=recordings/run-376fefbdfc1a.json`)
 - **Model ladder run:** Nano's patch is rejected by the verifier, the run escalates to Super, and the
@@ -26,7 +28,7 @@ comes from model output.
 
 | Piece | What it does in PatchWarden |
 |---|---|
-| **NVIDIA Nemotron 3 Super** (`nvidia/nemotron-3-super-120b-a12b`) | Diagnoses the failure, writes the patch, and picks challenge scenarios from a fixed catalog |
+| **NVIDIA Nemotron 3 Super** (`nvidia/nemotron-3-super-120b-a12b`) | Writes the reproducer test when the alert has none, diagnoses the failure, writes the patch, and picks challenge scenarios from a fixed catalog |
 | **Nebius Token Factory** | Serves Nemotron through its OpenAI-compatible API (`https://api.tokenfactory.nebius.com/v1/`) with retries, timeouts and token caps |
 | **Tavily** | Searches docs for the observed error; results are passed to the model as untrusted hints and cited in the PR |
 | **E2B** | Runs every command that executes repository code in a microVM whose network can reach only PyPI |
@@ -35,8 +37,8 @@ comes from model output.
 
 ### How we use NVIDIA Nemotron on Nebius Token Factory
 
-- **Every run calls Token Factory at runtime**, 3 to 4 times: Nemotron diagnoses the observed
-  failure, writes the patch (whole files; PatchWarden builds the diff), picks challenge scenarios
+- **Every run calls Token Factory at runtime**, 3 to 5 times: Nemotron writes the reproducer
+  when the alert ships none, diagnoses the observed failure, writes the patch (whole files; PatchWarden builds the diff), picks challenge scenarios
   from the catalog, and with `--repair-discovery` writes the second fix. Hosted runs do the same.
 - **Three Nemotron models, measured.** Nemotron 3 Super is the default. Nemotron 3 Ultra (550B)
   and Nemotron 3 Nano (30B) ran the same six cases with one environment variable changed: all
@@ -73,6 +75,12 @@ flowchart LR
 2. **Baseline.** A fresh E2B sandbox runs the reproducer test and the original suite at the pinned
    commit. The reproducer must fail *for the reported error type*; otherwise the run stops as
    UNREPRODUCED. Every test file, the contracts and the control gateway are hashed.
+   **No reproducer in the alert?** Nemotron writes one from the stack trace and the sanitized
+   request. Trusted code runs it in the sandbox and accepts it only if pytest reports the reported
+   error at the exact `file:line` the alert's deepest frame names (a test that raises the error
+   itself, expects it, or fails elsewhere is rejected with the reason fed back; two tries). The accepted
+   test is hashed with the protected tests, so no patch can weaken it, and ships in the PR as the
+   regression test.
 3. **Diagnose and patch.** Nemotron sees the observed red output, the source files that output
    names (or that the failing test imports), and Tavily hints. It returns whole files; PatchWarden
    builds the diff. The patch policy allows only `demo_app/app/**/*.py`.
@@ -112,6 +120,11 @@ a human would write, which is why every change goes to a reviewer.
 Nemotron 3 Nano also verified 6/6 incidents with 0 false positives; Nano needed the verifier's
 feedback loop twice. With the Nano → Super → Ultra patch ladder, all six verified and the verifier
 escalated three of them to Super. Super stays the default. See the comparison in [`docs/evaluation.md`](docs/evaluation.md#same-six-cases-on-other-nemotron-models).
+
+**Alerts with only a stack trace.** Alerts 07–09 are three of the crashes above with no
+reproducer attached. In 6 live runs (each alert twice), Nemotron's first test was accepted every
+time, all 6 fixes verified, and the hidden double charge was still found in 5 of 6. Replay one:
+`/ui/?replay=recordings/run-4e9997e40534.json`. Details: [`docs/evaluation.md`](docs/evaluation.md#alerts-with-only-a-stack-trace).
 
 ## Run it
 
@@ -156,8 +169,10 @@ does this). Hosted: `docker build -t patchwarden . && docker run -p 8000:8000 --
   contains deliberate bugs, all disclosed in
   [`demo_app/seed_variants/README.md`](demo_app/seed_variants/README.md). One is hidden from the
   agent: no alert, test or comment points to it.
-- **Reproducers ship with the repo.** Each alert names a trusted reproducer ID that maps to an
-  existing failing test. A real production alert would need extra evidence to build one.
+- **Reproducers.** Alerts 01–06 name a reproducer test that ships with the repo. Alerts 07–09 carry
+  only the stack trace and the agent writes the test; the writing prompt never shows the shipped
+  incident tests, but they are still in the demo repo. Writing a reproducer needs a crash with a
+  stack frame in the repository, so logic bugs like case 03 still need a shipped test.
 - **Bounded evidence.** Passing tests and invariants are evidence, not proof of correctness.
 - **Small sample.** Six cases, one run each, on one small app. They do not represent production bugs.
 - **Never merges or deploys.** Every change goes through a human-reviewed PR.

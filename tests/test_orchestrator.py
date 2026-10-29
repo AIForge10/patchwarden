@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 from patchwarden import config
-from patchwarden.agent import patcher
+from patchwarden.agent import patcher, reproducer
 from patchwarden.agent.nebius_client import Reply
 from patchwarden.agent.prompts import DIAGNOSIS_SYSTEM
 from patchwarden.discovery import scenarios
@@ -348,18 +348,14 @@ def test_tavily_failure_does_not_block_a_verified_repair(target, monkeypatch) ->
     assert any("Web search skipped" in event.message for event in list_events(result.run_id))
 
 
-def test_secondary_repair_loop_verifies_and_includes_fix(
-    target, monkeypatch, fake_github
-) -> None:
+def test_secondary_repair_loop_verifies_and_includes_fix(target, monkeypatch, fake_github) -> None:
     monkeypatch.setattr(config, "RUN_DISCOVERY", True)
     monkeypatch.setattr(config, "REPAIR_DISCOVERY", True)
     monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", True)
     sha = target["sha"]  # the seeded baseline carries the hidden double charge
     fake_github.base_sha = sha
     payments_fixed = (
-        (Path(target["repo_url"]) / "demo_app/app/payments.py")
-        .read_text()
-        .replace(HIDDEN, CLEAN)
+        (Path(target["repo_url"]) / "demo_app/app/payments.py").read_text().replace(HIDDEN, CLEAN)
     )
     _fake_model(
         monkeypatch,
@@ -451,3 +447,83 @@ def test_repair_override_applies_to_one_run_and_manifest_carries_the_patch(
     assert manifest["discovery"]["repaired"] == ["retry_same_key"]
     messages = [e.message for e in list_events(result.run_id)]
     assert any("PR step disabled" in m for m in messages)
+
+
+ALERT_TRACE = (
+    "Traceback (most recent call last):\n"
+    '  File "demo_app/app/main.py", line 14, in checkout\n'
+    "    result = PaymentResult.model_validate(response)\n"
+    "pydantic_core._pydantic_core.ValidationError: 1 validation error for PaymentResult\n"
+)
+WRITTEN_TEST = (
+    "from demo_app.app.main import checkout\n"
+    "from demo_app.app.models import CheckoutRequest\n"
+    "from demo_app.app.store import reset_state\n\n\n"
+    "def test_malformed_gateway_response_fails_the_order() -> None:\n"
+    "    reset_state()\n"
+    "    request = CheckoutRequest(\n"
+    '        order_id="o-1", amount=50, idempotency_key="o-1", provider_mode="malformed"\n'
+    "    )\n"
+    '    assert checkout(request).status == "failed"\n'
+)
+# Fails, and even prints the error name, but never reaches the line the alert names.
+CHEATING_TEST = 'def test_fake() -> None:\n    assert False, "ValidationError"\n'
+
+
+def _synthesis_alert(target) -> IncidentEvidence:
+    return _incident(target, reproducer_id="synthesize", traceback=ALERT_TRACE)
+
+
+def test_model_written_reproducer_is_accepted_and_ships_in_the_pr(
+    target, monkeypatch, fake_github
+) -> None:
+    monkeypatch.setattr(config, "OPEN_PR_ON_VERIFIED", True)
+    fake_github.base_sha = target["sha"]
+    _fake_model(monkeypatch, [_file_reply("demo_app/app/main.py", FIX)])
+    monkeypatch.setattr(
+        reproducer,
+        "chat_full",
+        lambda *args, **kwargs: Reply(
+            _file_reply("demo_app/tests/test_patchwarden_reproducer.py", WRITTEN_TEST),
+            "stop",
+            False,
+        ),
+    )
+    result = run_incident(_synthesis_alert(target))
+
+    assert result.status == RunStatus.PR_OPENED
+    (commit,) = fake_github.commits.values()
+    assert commit["files"]["demo_app/tests/test_patchwarden_reproducer.py"] == (
+        "100644",
+        WRITTEN_TEST,
+    )
+    assert commit["files"]["demo_app/app/main.py"] == ("100644", FIX)
+    assert "wrote `demo_app/tests/test_patchwarden_reproducer.py`" in fake_github.pulls[0].body
+    manifest = json.loads(Path(result.evidence_path).read_text())
+    assert manifest["reproducer"]["source"] == WRITTEN_TEST
+    assert manifest["reproducer"]["path"] in manifest["protected_test_sha256"]  # hashed, like any
+    messages = [e.message for e in list_events(result.run_id)]
+    assert any(
+        "reproducer accepted: fails with ValidationError at demo_app/app/main.py:14" in m
+        for m in messages
+    )
+
+
+def test_reproducer_that_misses_the_alerts_crash_line_is_rejected(target, monkeypatch) -> None:
+    prompts = _fake_model(monkeypatch, [_file_reply("demo_app/app/main.py", FIX)])
+    monkeypatch.setattr(
+        reproducer,
+        "chat_full",
+        lambda *args, **kwargs: Reply(
+            _file_reply("demo_app/tests/x.py", CHEATING_TEST), "stop", False
+        ),
+    )
+    result = run_incident(_synthesis_alert(target))
+
+    assert result.status == RunStatus.UNREPRODUCED
+    assert prompts == []  # no patch is requested without an accepted reproducer
+    rejected = [e.message for e in list_events(result.run_id) if "reproducer rejected" in e.message]
+    assert (
+        len(rejected) == 2
+        and "did not fail with ValidationError at demo_app/app/main.py:14" in rejected[0]
+    )

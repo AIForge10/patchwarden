@@ -7,6 +7,13 @@
     "label": "Headline: signed alert demo-001 → verified fix, hidden defect found, PR #8"
   },
   {
+    "run_id": "run-4e9997e40534",
+    "incident_id": "demo-008-r1793266445",
+    "file": "run-4e9997e40534.json",
+    "status": "VERIFIED",
+    "label": "No reproducer attached: Nemotron writes the failing test from the stack trace, then fixes the crash"
+  },
+  {
     "run_id": "run-6f018665190c",
     "incident_id": "demo-001-r1793262700",
     "file": "run-6f018665190c.json",

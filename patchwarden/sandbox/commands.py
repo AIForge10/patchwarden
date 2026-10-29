@@ -6,7 +6,10 @@ REPRODUCER_TESTS = {
     "checkout_unapproved_payment": "demo_app/tests/test_incident_review.py",
     "checkout_unknown_sku": "demo_app/tests/test_incident_inventory.py",
     "checkout_gateway_timeout": "demo_app/tests/test_incident_timeout.py",
+    # No reproducer ships with the alert: the agent writes one here (agent/reproducer.py).
+    "synthesize": "demo_app/tests/test_patchwarden_reproducer.py",
 }
+SYNTHESIZED_REPRODUCER = "synthesize"
 _REPRODUCERS = {key: ["python", "-m", "pytest", path] for key, path in REPRODUCER_TESTS.items()}
 
 

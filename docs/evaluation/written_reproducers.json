@@ -1,0 +1,66 @@
+{
+  "seeded_commit": "1e83628cf0f20310c9da2a3454440a27be1a9daa",
+  "known_good_commit": "d58b4dfdaa4d171a93affcd68c3e830379632fa5",
+  "cases": [
+    {
+      "case_id": "case_07_malformed_gateway_written_reproducer",
+      "fixture": "demo_app/fixtures/incident_07.json",
+      "flags": "--no-pr",
+      "run_id": "run-32147897ff97",
+      "blind": false,
+      "seeded_hidden_defects": [
+        "retry_same_key"
+      ]
+    },
+    {
+      "case_id": "case_08_inventory_missing_written_reproducer",
+      "fixture": "demo_app/fixtures/incident_08.json",
+      "flags": "--no-pr",
+      "run_id": "run-a38e2747bcd6",
+      "blind": false,
+      "seeded_hidden_defects": [
+        "retry_same_key"
+      ]
+    },
+    {
+      "case_id": "case_09_gateway_timeout_written_reproducer",
+      "fixture": "demo_app/fixtures/incident_09.json",
+      "flags": "--no-pr",
+      "run_id": "run-35f21e04f6e8",
+      "blind": false,
+      "seeded_hidden_defects": [
+        "retry_same_key"
+      ]
+    },
+    {
+      "case_id": "case_07_malformed_gateway_written_reproducer_repeat2",
+      "fixture": "demo_app/fixtures/incident_07.json",
+      "flags": "--no-pr",
+      "run_id": "run-96abff6fbb99",
+      "blind": false,
+      "seeded_hidden_defects": [
+        "retry_same_key"
+      ]
+    },
+    {
+      "case_id": "case_08_inventory_missing_written_reproducer_repeat2",
+      "fixture": "demo_app/fixtures/incident_08.json",
+      "flags": "--no-pr",
+      "run_id": "run-4e9997e40534",
+      "blind": false,
+      "seeded_hidden_defects": [
+        "retry_same_key"
+      ]
+    },
+    {
+      "case_id": "case_09_gateway_timeout_written_reproducer_repeat2",
+      "fixture": "demo_app/fixtures/incident_09.json",
+      "flags": "--no-pr",
+      "run_id": "run-659955a0a467",
+      "blind": false,
+      "seeded_hidden_defects": [
+        "retry_same_key"
+      ]
+    }
+  ]
+}

@@ -33,6 +33,7 @@ CASES = {
     "04": ("incident_04.json", False, "Unknown SKU crashes checkout"),
     "05": ("incident_05.json", False, "Gateway timeout crashes checkout"),
     "06": ("incident_06.json", False, "Negative control: same crash, hidden defect absent"),
+    "07": ("incident_07.json", False, "No reproducer attached: the agent writes the failing test"),
 }
 
 _lock = threading.Lock()

@@ -1,5 +1,7 @@
 """Prompts for diagnosis, patch generation and failure analysis. Owner: Satyabrata."""
 
+import json
+
 PATCH_SYSTEM = (
     "You are a careful senior Python engineer fixing a production bug. "
     "Make the smallest change that fixes the failure. Never edit tests, "
@@ -52,6 +54,44 @@ def build_patch_prompt(
         "Reply in EXACTLY this format and nothing else. For each file you change, write\n"
         "a line `FILE: <path>` followed by ONE ```python block holding the COMPLETE new "
         "contents of that file. Only include files you changed. No explanations."
+    )
+    return "\n".join(parts)
+
+
+REPRODUCER_SYSTEM = (
+    "You are a careful senior Python engineer turning a production crash report into a "
+    "failing regression test. Write only the test; never change application code."
+)
+
+
+def build_reproducer_prompt(
+    incident, path: str, files: dict, example: str, feedback: str = ""
+) -> str:
+    """Ask for one pytest file that crashes like the alert today and passes once it is fixed."""
+    parts = [
+        f"Production alert: {incident.message}",
+        f"Error type: {incident.error_type}",
+        "Stack trace from production:\n" + incident.traceback.strip() + "\n",
+    ]
+    if incident.sanitized_request:
+        parts.append(f"Sanitized request: {json.dumps(incident.sanitized_request)}")
+    if incident.environment:
+        parts.append(f"Environment: {json.dumps(incident.environment)}")
+    parts.append("\nSource files:\n")
+    for name, code in files.items():
+        parts.append(f"FILE: {name}\n```python\n{code}\n```\n")
+    parts.append("An existing test in this repository, for imports and setup:\n")
+    parts.append(f"```python\n{example}\n```\n")
+    if feedback:
+        parts.append(f"Your previous test was rejected:\n{feedback.strip()}\nFix that this time.\n")
+    parts.append(
+        "Write ONE pytest test that drives the application the way the request above did. "
+        "Today it must crash with the same error at the same line as the stack trace: do not "
+        "catch the error, raise it yourself, or use pytest.raises. Once the bug is fixed the "
+        "test must pass, so assert what a correct fix would do (for example, the order fails "
+        "cleanly instead of crashing).\n"
+        f"Reply in EXACTLY this format and nothing else: a line `FILE: {path}` followed by ONE "
+        "```python block holding the complete test file."
     )
     return "\n".join(parts)
 

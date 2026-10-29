@@ -77,6 +77,35 @@ those two cases could have reused case 01's cached replies. They were discarded 
 `NEBIUS_NO_CACHE=1`; the table uses only the rerun results. Cases 01, 03, 04 and 05 were the first request
 of their prompts for each model.
 
+## Alerts with only a stack trace
+
+Alerts 07, 08 and 09 are incidents 01, 04 and 05 with `reproducer_id: "synthesize"`: no test is
+attached, only the alert text, stack trace and sanitized request. Nemotron 3 Super writes
+`demo_app/tests/test_patchwarden_reproducer.py`; trusted code runs it in E2B at the pinned commit
+and accepts it only if pytest reports the reported error type at the exact `file:line` of the
+alert's deepest repository frame (`main.py:14`, `store.py:20`, `payments.py:12`). The accepted test
+is hashed with the protected tests and its source is in the evidence manifest. Each alert ran
+twice, live, cache off, no PRs; rows in [`evaluation_written_reproducers.csv`](evaluation_written_reproducers.csv)
+from [`evaluation/written_reproducers.json`](evaluation/written_reproducers.json).
+
+| Alert | Crash line the test had to hit | Test accepted | Verified | Hidden double charge |
+|---|---|---|---|---|
+| 07 malformed gateway | `demo_app/app/main.py:14` `ValidationError` | 2/2, first try | 2/2 (attempt 1) | 1/2 |
+| 08 unknown SKU | `demo_app/app/store.py:20` `KeyError` | 2/2, first try | 2/2 (attempt 1) | 2/2 |
+| 09 gateway timeout | `demo_app/app/payments.py:12` `TimeoutError` | 2/2, first try | 2/2 (attempt 1) | 2/2 |
+
+- Every written test recreated the production request from the alert and asserted what a correct
+  fix should do (the order fails cleanly instead of crashing), so the same test then judged the
+  patch.
+- In the second run of 07, Super proposed only one challenge scenario and it was not
+  `retry_same_key`, so the hidden defect was not found; nothing false was claimed.
+- The writing prompt shows the stack trace, the source files it names, the modules the original
+  suite imports and `test_baseline.py` for style, never the shipped incident tests. Those tests
+  are still in the demo repo.
+- A rejected test is covered by `tests/test_orchestrator.py`: a test that fails with the error's
+  name but never reaches the alert's line is refused twice and the run stops as UNREPRODUCED
+  without a single patch request.
+
 ## What each case measures
 
 - **01** The reported incident: red to green, original suite still green. Discovery runs with the

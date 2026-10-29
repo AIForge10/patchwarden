@@ -67,6 +67,12 @@ def _source_paths(raw: list, root: Path) -> list:
     return [path for path in _repo_paths(raw, root) if not _is_test_file(path)]
 
 
+def imported_sources(test_path: str, repo_root) -> list:
+    """Repo source files that `test_path` imports: how the app is driven from a test."""
+    root = Path(repo_root).resolve()
+    return _source_paths(_imported_paths([test_path], root), root)
+
+
 def select_context_paths(traceback: str, repo_root, max_files: int = 5) -> list:
     """Plan name for paths_from_traceback (PDF section 6)."""
     return paths_from_traceback(traceback, repo_root, max_files)
