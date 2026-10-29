@@ -1,5 +1,5 @@
 #!/bin/sh
-# Reject commit messages that credit an AI coding agent (see .claude/CLAUDE.md).
+# Reject commit messages that credit an AI coding agent.
 # Installed via `make hooks`; CI runs this same script on every PR commit.
 # Usage: commit-msg <message-file>
 
@@ -9,6 +9,6 @@ if grep -inE "^[[:space:]]*co-authored-by:.*($AGENTS)" "$1" ||
    grep -inE "^[^[:alnum:]]*generated (with|by) \[?($AGENTS)" "$1"; then
     echo >&2
     echo "commit-msg: AI agent attribution found in the commit message (line shown above)." >&2
-    echo "Remove the Co-authored-by trailer or 'Generated with' footer; see .claude/CLAUDE.md." >&2
+    echo "Remove the Co-authored-by trailer or 'Generated with' footer." >&2
     exit 1
 fi
