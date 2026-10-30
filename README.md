@@ -11,7 +11,7 @@ evidence file or the PR is taken from model output on trust.
 | | |
 |---|---|
 | **Live demo** | https://p01--patchwarden-api--smbsdvp245v8.code.run/ui/ (no login) |
-| **Video (3 min)** | _YouTube link added before submission_ |
+| **Video (3 min)** | https://youtu.be/-sQQZBR6b8Q |
 | **PRs it opened** | https://github.com/Satyabratadas/patchwarden-demo/pulls |
 | **Results** | [`docs/evaluation.md`](docs/evaluation.md): 32 live runs, 0 false positives |
 | **Track** | Coding and Agentic Engineering |
